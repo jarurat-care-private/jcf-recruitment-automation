@@ -1,4 +1,4 @@
-// src/pages/CandidatePortalPage.jsx
+// src/pages/CandidatePortalPage.jsx - WITH PROBATION MEETING RESCHEDULE SUPPORT
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
@@ -169,6 +169,7 @@ export default function CandidatePortalPage() {
     const { data: ivs } = await supabase.from('interviews').select('*').eq('candidate_id', candidate.id).in('status', ['Scheduled', 'Reschedule_Requested', 'Completed', 'On Hold']).not('scheduled_date_time', 'is', null).order('id', { ascending: false });
     setInterviews(ivs || []);
     
+    // Fetch onboarding data including reschedule flag
     const { data: ob } = await supabase.from('onboarding').select('*').eq('candidate_id', candidate.id).maybeSingle();
     setOnboardingData(ob);
   }
@@ -483,7 +484,12 @@ export default function CandidatePortalPage() {
 
   const getProbationMeetingDetails = () => {
     if (!onboardingData) return null;
-    return { date: onboardingData.probation_meeting_date, end: onboardingData.probation_meeting_end, link: onboardingData.probation_meeting_link };
+    return { 
+      date: onboardingData.probation_meeting_date, 
+      end: onboardingData.probation_meeting_end, 
+      link: onboardingData.probation_meeting_link,
+      rescheduled: onboardingData.probation_meeting_rescheduled || false
+    };
   };
 
   const isOnWaitlist = candidate?.current_stage === 'Waitlist';
@@ -598,7 +604,7 @@ export default function CandidatePortalPage() {
   }
 
   // ==========================================
-  // DASHBOARD UI (Restored Logic)
+  // DASHBOARD UI
   // ==========================================
   const stageMapping = [
     { id: 'Applied', label: 'APPLICATION\nSUBMITTED' },
@@ -859,7 +865,14 @@ export default function CandidatePortalPage() {
                   </p>
                   {probationMeeting && (
                     <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '12px', padding: '24px', textAlign: 'left', maxWidth: '500px', margin: '0 auto' }}>
-                      <h4 style={{ color: '#fff', margin: '0 0 16px 0', fontSize: '16px', textAlign: 'center' }}>📅 Probation Meeting Scheduled</h4>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h4 style={{ color: '#fff', margin: 0, fontSize: '16px' }}>📅 Probation Meeting</h4>
+                        {probationMeeting.rescheduled && (
+                          <span style={{ fontSize: '11px', color: '#fbbf24', background: 'rgba(245, 158, 11, 0.1)', padding: '4px 10px', borderRadius: '12px' }}>
+                            Rescheduled
+                          </span>
+                        )}
+                      </div>
                       <div style={{ background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
                         <p style={{ margin: '4px 0', color: 'var(--text-muted)' }}>Date: <span style={{color: '#fff', fontWeight: '600'}}>{getFormattedDateIST(probationMeeting.date)}</span></p>
                         <p style={{ margin: '4px 0', color: 'var(--text-muted)' }}>Time: <span style={{color: '#fff', fontWeight: '600'}}>{extractTimeFromISO(probationMeeting.date)} - {extractTimeFromISO(probationMeeting.end)}</span></p>
@@ -881,7 +894,14 @@ export default function CandidatePortalPage() {
                   </p>
                   {probationMeeting && (
                     <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '12px', padding: '24px', textAlign: 'left', maxWidth: '500px', margin: '0 auto' }}>
-                      <h4 style={{ color: '#fff', margin: '0 0 16px 0', fontSize: '16px', textAlign: 'center' }}>📅 Probation Meeting Scheduled</h4>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h4 style={{ color: '#fff', margin: 0, fontSize: '16px' }}>📅 Probation Meeting</h4>
+                        {probationMeeting.rescheduled && (
+                          <span style={{ fontSize: '11px', color: '#fbbf24', background: 'rgba(245, 158, 11, 0.1)', padding: '4px 10px', borderRadius: '12px' }}>
+                            Rescheduled
+                          </span>
+                        )}
+                      </div>
                       <div style={{ background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
                         <p style={{ margin: '4px 0', color: 'var(--text-muted)' }}>Date: <span style={{color: '#fff', fontWeight: '600'}}>{getFormattedDateIST(probationMeeting.date)}</span></p>
                         <p style={{ margin: '4px 0', color: 'var(--text-muted)' }}>Time: <span style={{color: '#fff', fontWeight: '600'}}>{extractTimeFromISO(probationMeeting.date)} - {extractTimeFromISO(probationMeeting.end)}</span></p>
@@ -946,7 +966,9 @@ export default function CandidatePortalPage() {
                 <h3 style={{ margin: '0 0 16px 0', fontSize: '13px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>System Status</h3>
                 <div>
                   <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>STAGE LOCK</span>
-                  <span style={{ fontSize: '18px', fontWeight: '800', color: '#60a5fa' }}>{candidate.current_stage?.toUpperCase() ?? 'N/A'}</span>
+                  <span style={{ fontSize: '18px', fontWeight: '800', color: candidate.current_stage === 'On Hold' ? '#64748b' : '#60a5fa' }}>
+                    {candidate.current_stage === 'On Hold' ? 'Interview' : candidate.current_stage?.toUpperCase() ?? 'N/A'}
+                  </span>
                 </div>
                 <button onClick={fetchWorkflowContext} className="btn-glass" style={{ width: '100%', marginTop: '24px', padding: '10px' }}>Sync State Node</button>
               </div>

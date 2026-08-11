@@ -1,10 +1,11 @@
-// src/pages/HRAdminDashboard.jsx
+// pages/HRAdminDashboard.jsx - COMPLETE FILE
 import { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import RegisterUser from '../components/RegisterUser';
 import ChangePasswordModal from '../components/ChangePasswordModal';
+import HRRegisterCandidate from '../components/HRRegisterCandidate';
 
 function HRAdminDashboard() {
   const navigate = useNavigate();
@@ -16,6 +17,7 @@ function HRAdminDashboard() {
   const [stageFilter, setStageFilter] = useState('');
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showRegisterCandidateModal, setShowRegisterCandidateModal] = useState(false);
   const [registrationSuccess, setRegistrationSuccess] = useState(null);
   
   const [metrics, setMetrics] = useState({ 
@@ -123,6 +125,12 @@ function HRAdminDashboard() {
     setTimeout(() => setRegistrationSuccess(null), 5000);
   };
 
+  const handleCandidateRegistrationSuccess = (newCandidate) => {
+    setRegistrationSuccess(`✅ ${newCandidate.name} registered as candidate!`);
+    setTimeout(() => setRegistrationSuccess(null), 5000);
+    fetchDashboardData();
+  };
+
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-dark)' }}>
@@ -214,7 +222,7 @@ function HRAdminDashboard() {
             </button>
           </div>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {/* User Info */}
             <div style={{ 
               display: 'flex', 
@@ -249,10 +257,29 @@ function HRAdminDashboard() {
               </div>
             </div>
 
-            {/* Actions */}
+            {/* Register User Button - HR Users only */}
             {canRegisterUsers() && (
               <button onClick={() => setShowRegisterModal(true)} className="btn-premium" style={{ padding: '10px 20px', fontSize: '13px' }}>
-                ➕ Register User
+                Register HR
+              </button>
+            )}
+
+            {/* Register Candidate Button - HR Users only */}
+            {canRegisterUsers() && (
+              <button 
+                onClick={() => setShowRegisterCandidateModal(true)} 
+                className="btn-glass" 
+                style={{ 
+                  padding: '10px 20px', 
+                  fontSize: '13px', 
+                  color: '#6ee7b7', 
+                  borderColor: 'rgba(16, 185, 129, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                📝 Register Candidate
               </button>
             )}
 
@@ -441,7 +468,7 @@ function HRAdminDashboard() {
           </table>
         </div>
 
-        {/* Modals remain structurally identical, ensuring backend logic isn't broken */}
+        {/* Modals */}
         {showRegisterModal && (
           <RegisterUser 
             onClose={() => setShowRegisterModal(false)}
@@ -451,6 +478,13 @@ function HRAdminDashboard() {
 
         {showChangePassword && (
           <ChangePasswordModal onClose={() => setShowChangePassword(false)} />
+        )}
+
+        {showRegisterCandidateModal && (
+          <HRRegisterCandidate 
+            onClose={() => setShowRegisterCandidateModal(false)}
+            onSuccess={handleCandidateRegistrationSuccess}
+          />
         )}
       </div>
     </>

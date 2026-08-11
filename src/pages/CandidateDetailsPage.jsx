@@ -1,3 +1,4 @@
+// pages/CandidateDetailsPage.jsx - COMPLETE WITH DETAILED PROFILE CHANGE LOGS
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
@@ -93,6 +94,8 @@ function CandidateDetailsPage() {
   const [assignment, setAssignment] = useState(null);
   const [interviews, setInterviews] = useState([]);
   const [onboarding, setOnboarding] = useState(null);
+  const [domains, setDomains] = useState([]);
+  const [referralData, setReferralData] = useState(null);
 
   const [hrNotes, setHrNotes] = useState('');
   const [scores, setScores] = useState({ content: '', formatting: '', ai: '' });
@@ -143,20 +146,87 @@ function CandidateDetailsPage() {
     reason: ''
   });
 
+  // Reschedule Probation Meeting Modal
+  const [showRescheduleProbationModal, setShowRescheduleProbationModal] = useState(false);
+  const [rescheduleProbationData, setRescheduleProbationData] = useState({
+    date: '',
+    startTime: '',
+    endTime: '',
+    link: '',
+    reason: ''
+  });
+
   const [downloadLoading, setDownloadLoading] = useState(false);
+  const [uploadResumeLoading, setUploadResumeLoading] = useState(false);
 
   // State for uploaded files
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [showFilesModal, setShowFilesModal] = useState(false);
 
+  // Profile edit states
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editProfileData, setEditProfileData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    domain: '',
+    source: '',
+    college_name: '',
+    degree_course: '',
+    graduation_year: '',
+    address: '',
+    linkedin_profile: '',
+    portfolio_link: '',
+    referrer_name: '',
+    referrer_contact: '',
+    other_source: '',
+  });
+
+  // URL validation regex
+  const urlRegex = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/;
+
+  // Standard source options
+  const standardSources = ['Internshala', 'Referral', 'Wellfound', 'Indeed', 'College Outreach', 'Social Media'];
+
+  // Source options for dropdown
+  const sourceOptions = [
+    'Internshala',
+    'Referral',
+    'Wellfound',
+    'Indeed',
+    'College Outreach',
+    'Social Media',
+    'Other'
+  ];
+
+  // Field labels for detailed logging
+  const fieldLabels = {
+    name: 'Name',
+    email: 'Email',
+    phone: 'Phone',
+    domain: 'Domain',
+    source: 'Source',
+    college_name: 'College/University',
+    degree_course: 'Degree/Course',
+    graduation_year: 'Graduation Year',
+    address: 'Address',
+    linkedin_profile: 'LinkedIn Profile',
+    portfolio_link: 'Portfolio Link',
+    referrer_name: 'Referrer Name',
+    referrer_contact: 'Referrer Contact',
+    other_source: 'Source Name'
+  };
+
   useEffect(() => {
     fetchCompleteProfile();
+    fetchDomains();
   }, [id]);
 
   useEffect(() => {
     if (candidate) {
       fetchCandidateQuestions();
       fetchUploadedFiles();
+      fetchReferralData();
     }
   }, [candidate]);
 
@@ -177,6 +247,65 @@ function CandidateDetailsPage() {
     return () => clearTimeout(timer);
   }, [faqForm.question]);
 
+  async function fetchReferralData() {
+    if (!candidate || candidate.source !== 'Referral') {
+      setReferralData(null);
+      return;
+    }
+    const { data, error } = await supabase
+      .from('referrals')
+      .select('*')
+      .eq('candidate_id', candidate.id)
+      .maybeSingle();
+    if (!error && data) {
+      setReferralData(data);
+    }
+  }
+
+  async function fetchDomains() {
+    try {
+      const { data, error } = await supabase
+        .from('assignment_templates')
+        .select('domain')
+        .order('domain', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching domains:', error);
+        setDomains([
+          "Automation & Operations",
+          "Brand Management & Outreach",
+          "Business Development",
+          "Clinical Psychologist",
+          "Content Creation",
+          "Creative Design",
+          "Graphic Design",
+          "HR Psychologist",
+          "Human Resources (HR)",
+          "Lead Generation",
+          "Marketing",
+          "Media & Public Relations (PR)",
+          "Motion Graphics",
+          "Operations",
+          "Project Management",
+          "Python Automation",
+          "Sales and Marketing",
+          "Social Media Management",
+          "Talent Acquisition",
+          "Video Editing/Making",
+          "UI/UX Design",
+          "Full stack Developer"
+        ]);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        setDomains(data.map(d => d.domain));
+      }
+    } catch (err) {
+      console.error('Error in fetchDomains:', err);
+    }
+  }
+
   async function fetchUploadedFiles() {
     if (!candidate) return;
     
@@ -192,6 +321,79 @@ function CandidateDetailsPage() {
       setUploadedFiles(data || []);
     }
   }
+
+  // ===== HANDLE RESUME UPLOAD WITH DETAILED LOGGING =====
+  const handleUploadResume = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      alert('Only PDF files are allowed. Please upload a PDF file.');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 100 * 1024 * 1024) {
+      alert('File size exceeds 100MB limit. Please upload a smaller file.');
+      e.target.value = '';
+      return;
+    }
+
+    setUploadResumeLoading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${candidate.id}/${Date.now()}.${fileExt}`;
+      const filePath = `resumes/${fileName}`;
+      
+      const { data, error: uploadError } = await supabase.storage
+        .from('resumes')
+        .upload(filePath, file, { 
+          cacheControl: '3600', 
+          upsert: true,
+          contentType: 'application/pdf'
+        });
+      
+      if (uploadError) {
+        throw new Error(uploadError.message);
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('resumes')
+        .getPublicUrl(filePath);
+
+      const { error: updateError } = await supabase
+        .from('candidates')
+        .update({ resume_link: urlData.publicUrl })
+        .eq('id', candidate.id);
+
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
+
+      // ===== LOG RESUME UPLOAD WITH DETAILS =====
+      await logTeamActivity(
+        'resume_uploaded',
+        'candidate',
+        candidate.id,
+        {
+          candidate_id: candidate.id,
+          candidate_name: candidate.name || candidate.full_name,
+          file_name: file.name,
+          file_size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
+          uploaded_by: localStorage.getItem('userName') || 'HR'
+        }
+      );
+
+      alert('✅ Resume uploaded successfully!');
+      fetchCompleteProfile();
+      
+    } catch (error) {
+      console.error('Error uploading resume:', error);
+      alert('Failed to upload resume. Please try again.');
+    } finally {
+      setUploadResumeLoading(false);
+      e.target.value = '';
+    }
+  };
 
   const handleDownloadResume = async () => {
     if (!candidate?.resume_link) {
@@ -418,6 +620,7 @@ function CandidateDetailsPage() {
     }
   }
 
+  // ===== HANDLE WITHDRAW CANDIDATE =====
   async function handleWithdrawCandidate() {
     if (!withdrawReason.trim()) { alert('Please enter a reason for withdrawal.'); return; }
     try {
@@ -428,7 +631,11 @@ function CandidateDetailsPage() {
 
       if (error) { alert(`Failed to withdraw candidate: ${error.message}`); return; }
 
-      await logTeamActivity('candidate_withdrawn', 'candidate', id, { candidate_id: id, candidate_name: candidate.name || candidate.full_name, reason: withdrawReason.trim() });
+      await logTeamActivity('candidate_withdrawn', 'candidate', id, { 
+        candidate_id: id, 
+        candidate_name: candidate.name || candidate.full_name, 
+        reason: withdrawReason.trim() 
+      });
       alert('✅ Candidate has been marked as Withdrawn.');
       setShowWithdrawModal(false);
       setWithdrawReason('');
@@ -436,6 +643,7 @@ function CandidateDetailsPage() {
     } catch (err) { alert('An error occurred while withdrawing the candidate.'); }
   }
 
+  // ===== HANDLE WAITLIST CANDIDATE =====
   async function handleWaitlistCandidate() {
     if (!waitlistReason.trim()) { alert('Please enter a reason for adding to waitlist.'); return; }
     const restoreStage = candidate.current_stage;
@@ -451,7 +659,13 @@ function CandidateDetailsPage() {
 
       if (error) { alert(`Failed to add candidate to waitlist: ${error.message}`); return; }
 
-      await logTeamActivity('candidate_waitlisted', 'candidate', id, { candidate_id: id, candidate_name: candidate.name || candidate.full_name, reason: waitlistReason.trim(), restore_stage: restoreStage, waitlisted_at: istFormatted });
+      await logTeamActivity('candidate_waitlisted', 'candidate', id, { 
+        candidate_id: id, 
+        candidate_name: candidate.name || candidate.full_name, 
+        reason: waitlistReason.trim(), 
+        restore_stage: restoreStage, 
+        waitlisted_at: istFormatted 
+      });
 
       const waitlistMessage = `Dear ${candidate.name || 'Candidate'},\n\nThank you for your interest in joining Jarurat Care Foundation. We have reviewed your application and appreciate the time and effort you've invested in our recruitment process.\n\nWhile we are impressed with your profile, we currently do not have an opening that perfectly matches your skills and experience. However, we believe you would be a valuable addition to our team in the future.\n\nWe have placed your application on our waitlist. Should a suitable position become available in the coming months, we will reach out to you directly with an opportunity to reopen your application.\n\nWe appreciate your understanding and wish you the very best in your career journey.\n\nWarm regards,\nHR Team\nJarurat Care Foundation`;
       const { error: questionError } = await supabase.from('candidate_questions').insert({ candidate_id: id, candidate_name: candidate.name || candidate.full_name, candidate_email: candidate.email, question: `📋 Application Status Update`, status: 'Replied', is_public: false, is_system_message: true, created_at: new Date().toISOString() });
@@ -471,6 +685,7 @@ function CandidateDetailsPage() {
     } catch (err) { alert('An error occurred while adding the candidate to waitlist.'); }
   }
 
+  // ===== HANDLE RESTORE FROM WAITLIST =====
   async function handleRestoreFromWaitlist() {
     if (!candidate.waitlist_restore_stage) { alert('No restore stage found for this candidate.'); return; }
     try {
@@ -484,7 +699,12 @@ function CandidateDetailsPage() {
 
       if (error) { alert(`Failed to restore candidate: ${error.message}`); return; }
 
-      await logTeamActivity('candidate_restored_from_waitlist', 'candidate', id, { candidate_id: id, candidate_name: candidate.name || candidate.full_name, restored_stage: candidate.waitlist_restore_stage, restored_at: istFormatted });
+      await logTeamActivity('candidate_restored_from_waitlist', 'candidate', id, { 
+        candidate_id: id, 
+        candidate_name: candidate.name || candidate.full_name, 
+        restored_stage: candidate.waitlist_restore_stage, 
+        restored_at: istFormatted 
+      });
 
       const restoreMessage = `Dear ${candidate.name || 'Candidate'},\n\nWe hope this message finds you well!\n\nWe are pleased to inform you that a position matching your profile has become available at Jarurat Care Foundation. Your application is being reopened from our waitlist.\n\nYou can now log in to your candidate portal to continue the recruitment process from where you left off. Please check your portal for the next steps.\n\nWe look forward to reconnecting with you!\n\nWarm regards,\nHR Team\nJarurat Care Foundation`;
       const { error: questionError } = await supabase.from('candidate_questions').insert({ candidate_id: id, candidate_name: candidate.name || candidate.full_name, candidate_email: candidate.email, question: `🔔 Application Reopened`, status: 'Replied', is_public: false, is_system_message: true, created_at: new Date().toISOString() });
@@ -501,6 +721,7 @@ function CandidateDetailsPage() {
     } catch (err) { alert('An error occurred while restoring the candidate.'); }
   }
 
+  // ===== HANDLE HR RESCHEDULE INTERVIEW =====
   async function handleHRRescheduleInterview() {
     const { interviewId, panel, link, date, startTime, endTime, reason } = hrRescheduleData;
     if (!date || !startTime || !endTime || !link) { alert("Please specify the date, start time, end time, and meeting link."); return; }
@@ -517,7 +738,15 @@ function CandidateDetailsPage() {
       const { error: updateError } = await supabase.from('interviews').update(updateData).eq('id', interviewId);
       if (updateError) { alert(`Failed to update interview: ${updateError.message}`); return; }
 
-      await logTeamActivity('interview_rescheduled_by_hr', 'interview', interviewId, { candidate_id: id, candidate_name: candidate.name || candidate.full_name, new_date: date, new_startTime: startTime, new_endTime: endTime, panel: panel, reason: reason || 'Rescheduled by HR' });
+      await logTeamActivity('interview_rescheduled_by_hr', 'interview', interviewId, { 
+        candidate_id: id, 
+        candidate_name: candidate.name || candidate.full_name, 
+        new_date: date, 
+        new_startTime: startTime, 
+        new_endTime: endTime, 
+        panel: panel, 
+        reason: reason || 'Rescheduled by HR' 
+      });
 
       const rescheduleMessage = `Dear ${candidate.name || 'Candidate'},\n\nYour interview has been rescheduled by the HR team.\n\nNew Interview Details:\n📅 Date: ${formatDateDisplay(date)}\n⏰ Time: ${timeSlotDisplay} (IST)\n🔗 Meeting Link: ${link}\n\nPlease make yourself available at the new time. If you have any concerns, please reach out to the HR team.\n\nBest regards,\nHR Team\nJarurat Care Foundation`;
       const { error: questionError } = await supabase.from('candidate_questions').insert({ candidate_id: id, candidate_name: candidate.name || candidate.full_name, candidate_email: candidate.email, question: `📅 Interview Rescheduled`, status: 'Replied', is_public: false, is_system_message: true, created_at: new Date().toISOString() });
@@ -538,6 +767,7 @@ function CandidateDetailsPage() {
     } catch (err) { alert(`An unexpected error occurred: ${err.message}`); }
   }
 
+  // ===== HANDLE SEND ASSIGNMENT =====
   async function handleSendAssignment() {
     const mappedTemplateLink = DOMAIN_ASSIGNMENT_LINKS[candidate.domain];
     if (!mappedTemplateLink) { alert(`No task URL template payload mapped for domain: ${candidate.domain}`); return; }
@@ -546,18 +776,37 @@ function CandidateDetailsPage() {
     deadlineTime.setDate(deadlineTime.getDate() + 2);
 
     const { data, error } = await supabase.from('assignments').upsert({
-      candidate_id: id, assignment_title: `${candidate.domain} Core Assignment Challenge`, task_link_template: mappedTemplateLink, deadline: deadlineTime.toISOString(), assignment_status: 'Assigned', sent_by: localStorage.getItem('hrEmail') || localStorage.getItem('userEmail') || 'System Admin', sent_date: new Date().toISOString()
+      candidate_id: id, 
+      assignment_title: `${candidate.domain} Core Assignment Challenge`, 
+      task_link_template: mappedTemplateLink, 
+      deadline: deadlineTime.toISOString(), 
+      assignment_status: 'Assigned', 
+      sent_by: localStorage.getItem('hrEmail') || localStorage.getItem('userEmail') || 'System Admin', 
+      sent_date: new Date().toISOString()
     }, { onConflict: 'candidate_id' }).select();
 
     if (error) { alert(`Failed to send assignment: ${error.message}`); return; }
 
     await supabase.from('candidates').update({ current_stage: 'Assignment' }).eq('id', id);
-    await logTeamActivity('assignment_sent', 'assignment', data?.[0]?.id || id, { candidate_id: id, candidate_name: candidate.name || candidate.full_name, domain: candidate.domain, deadline: deadlineTime.toISOString() });
+    
+    await logTeamActivity(
+      'assignment_dispatched',
+      'assignment',
+      data?.[0]?.id || id,
+      {
+        candidate_id: id,
+        candidate_name: candidate.name || candidate.full_name,
+        domain: candidate.domain,
+        deadline: deadlineTime.toISOString(),
+        sent_by: localStorage.getItem('userName') || 'HR'
+      }
+    );
     
     alert('Assignment link dispatched.');
     fetchCompleteProfile();
   }
 
+  // ===== HANDLE SAVE EVALUATION =====
   async function handleSaveEvaluation() {
     if (assignment?.assignment_status === 'Evaluated') { alert('Assignment has already been evaluated.'); return; }
     
@@ -566,23 +815,49 @@ function CandidateDetailsPage() {
     const aiScore = parseFloat(scores.ai) || 0;
     const calculatedTotal = cScore + fScore - aiScore;
     const currentUser = localStorage.getItem('hrEmail') || localStorage.getItem('userEmail') || 'Unknown';
+    const currentUserName = localStorage.getItem('userName') || 'HR';
 
-    const { error: assignError } = await supabase.from('assignments').update({ content_score: cScore, formatting_score: fScore, ai_score: aiScore, assignment_status: 'Evaluated', evaluated_by: currentUser, evaluation_date: new Date().toISOString() }).eq('candidate_id', id);
+    const { error: assignError } = await supabase.from('assignments').update({ 
+      content_score: cScore, 
+      formatting_score: fScore, 
+      ai_score: aiScore, 
+      assignment_status: 'Evaluated', 
+      evaluated_by: currentUser, 
+      evaluation_date: new Date().toISOString() 
+    }).eq('candidate_id', id);
 
     if (assignError) { alert(`Failed to save matrix grades: ${assignError.message}`); return; }
 
-    await logTeamActivity('assignment_evaluated', 'assignment', assignment?.id || id, { candidate_id: id, candidate_name: candidate.name || candidate.full_name, total_score: calculatedTotal, content_score: cScore, formatting_score: fScore, ai_score: aiScore });
+    await logTeamActivity(
+      'assignment_evaluated',
+      'assignment',
+      assignment?.id || id,
+      {
+        candidate_id: id,
+        candidate_name: candidate.name || candidate.full_name,
+        total_score: calculatedTotal,
+        content_score: cScore,
+        formatting_score: fScore,
+        ai_score: aiScore,
+        evaluated_by: currentUserName
+      }
+    );
 
     if (calculatedTotal < 6) {
       await supabase.from('candidates').update({ assignment_score: Math.round(calculatedTotal) }).eq('id', id);
       alert(`Scores saved! Calculated Total Score: ${calculatedTotal} (< 6).\nCandidate kept in 'Assignment' stage for custom manual selection triage override.`);
     } else {
-      await supabase.from('candidates').update({ current_stage: 'Interview', r1_status: 'Pending', assignment_score: Math.round(calculatedTotal) }).eq('id', id);
+      await supabase.from('candidates').update({ 
+        current_stage: 'Interview', 
+        r1_status: 'Pending', 
+        assignment_score: Math.round(calculatedTotal) 
+      }).eq('id', id);
       alert(`Scores saved! Calculated Total Score: ${calculatedTotal} (>= 6).\nPipeline advanced to 'Interview' state, and Round 1 has been provisioned.`);
     }
     fetchCompleteProfile();
   }
 
+  // ===== HANDLE SCHEDULE INTERVIEW =====
   async function handleScheduleInterview(roundName) {
     if (!scheduleInput.date || !scheduleInput.startTime || !scheduleInput.endTime || !scheduleInput.link) { alert("Please specify the date, start time, end time, and meeting link."); return; }
     if (scheduleInput.startTime >= scheduleInput.endTime) { alert("End time must be after start time."); return; }
@@ -597,7 +872,17 @@ function CandidateDetailsPage() {
     if (panelistsArray.length === 0) { panelistsArray = ['Panelist Not Assigned']; }
 
     const interviewData = {
-      candidate_id: parseInt(id), round: roundName, scheduled_date_time: startDateTime.toISOString(), scheduled_end_time: endDateTime.toISOString(), time_slot: timeSlotDisplay, panelists: panelistsArray, meeting_link: scheduleInput.link, result: 'Pending', status: 'Scheduled', scheduled_by: localStorage.getItem('hrEmail') || localStorage.getItem('userEmail') || 'System', scheduled_date: new Date().toISOString()
+      candidate_id: parseInt(id), 
+      round: roundName, 
+      scheduled_date_time: startDateTime.toISOString(), 
+      scheduled_end_time: endDateTime.toISOString(), 
+      time_slot: timeSlotDisplay, 
+      panelists: panelistsArray, 
+      meeting_link: scheduleInput.link, 
+      result: 'Pending', 
+      status: 'Scheduled', 
+      scheduled_by: localStorage.getItem('hrEmail') || localStorage.getItem('userEmail') || 'System', 
+      scheduled_date: new Date().toISOString()
     };
 
     const { data, error } = await supabase.from('interviews').insert(interviewData).select(); 
@@ -607,13 +892,23 @@ function CandidateDetailsPage() {
     const statusField = roundName === 'R1' ? { r1_status: 'Scheduled' } : { r2_status: 'Scheduled' };
     await supabase.from('candidates').update(statusField).eq('id', id);
     
-    await logTeamActivity('interview_scheduled', 'interview', data?.[0]?.id || id, { candidate_id: id, candidate_name: candidate.name || candidate.full_name, round: roundName, date: scheduleInput.date, startTime: scheduleInput.startTime, endTime: scheduleInput.endTime, panel: panelValue || 'Panelist Not Assigned' });
+    await logTeamActivity('interview_scheduled', 'interview', data?.[0]?.id || id, { 
+      candidate_id: id, 
+      candidate_name: candidate.name || candidate.full_name, 
+      round: roundName, 
+      date: scheduleInput.date, 
+      startTime: scheduleInput.startTime, 
+      endTime: scheduleInput.endTime, 
+      panel: panelValue || 'Panelist Not Assigned',
+      scheduled_by: localStorage.getItem('userName') || 'HR'
+    });
     
     alert(`Interview ${roundName} scheduled successfully for ${timeSlotDisplay}!`);
     setScheduleInput({ panel: '', link: '', date: '', startTime: '', endTime: '' });
     fetchCompleteProfile();
   }
 
+  // ===== HANDLE SCHEDULE PROBATION MEETING =====
   async function handleScheduleProbationMeeting() {
     if (!probationInput.date || !probationInput.startTime || !probationInput.endTime || !probationInput.link) { alert("Please specify the date, start time, end time, and meeting link for the probation meeting."); return; }
     if (probationInput.startTime >= probationInput.endTime) { alert("End time must be after start time."); return; }
@@ -621,27 +916,166 @@ function CandidateDetailsPage() {
     const startDateTime = new Date(`${probationInput.date}T${probationInput.startTime}:00+05:30`);
     const endDateTime = new Date(`${probationInput.date}T${probationInput.endTime}:00+05:30`);
 
-    const { error } = await supabase.from('onboarding').update({ probation_meeting_date: startDateTime.toISOString(), probation_meeting_end: endDateTime.toISOString(), probation_meeting_link: probationInput.link, probation_meeting_scheduled: true }).eq('candidate_id', id);
+    const { error } = await supabase.from('onboarding').update({ 
+      probation_meeting_date: startDateTime.toISOString(), 
+      probation_meeting_end: endDateTime.toISOString(), 
+      probation_meeting_link: probationInput.link, 
+      probation_meeting_scheduled: true 
+    }).eq('candidate_id', id);
 
     if (error) { alert(`❌ Failed to schedule probation meeting: ${error.message}`); return; }
 
     const timeSlotDisplay = `${formatTimeForDisplay(probationInput.startTime)} - ${formatTimeForDisplay(probationInput.endTime)}`;
     const probationMessage = `Dear ${candidate.name || 'Candidate'},\n\nYour probation meeting has been scheduled.\n\nMeeting Details:\n📅 Date: ${formatDateDisplay(probationInput.date)}\n⏰ Time: ${timeSlotDisplay} (IST)\n🔗 Meeting Link: ${probationInput.link}\n\nPlease join the meeting at the scheduled time.\n\nBest regards,\nHR Team\nJarurat Care Foundation`;
 
-    const { error: questionError } = await supabase.from('candidate_questions').insert({ candidate_id: id, candidate_name: candidate.name || candidate.full_name, candidate_email: candidate.email, question: `📅 Probation Meeting Scheduled`, status: 'Replied', is_public: false, is_system_message: true, created_at: new Date().toISOString() });
+    const { error: questionError } = await supabase.from('candidate_questions').insert({ 
+      candidate_id: id, 
+      candidate_name: candidate.name || candidate.full_name, 
+      candidate_email: candidate.email, 
+      question: `📅 Probation Meeting Scheduled`, 
+      status: 'Replied', 
+      is_public: false, 
+      is_system_message: true, 
+      created_at: new Date().toISOString() 
+    });
 
     if (!questionError) {
       const { data: questionData } = await supabase.from('candidate_questions').select('id').eq('candidate_id', id).order('created_at', { ascending: false }).limit(1).single();
       if (questionData) {
-        await supabase.from('question_replies').insert({ question_id: questionData.id, reply: probationMessage, replied_by: 'Jarurat Care Foundation', is_hr_reply: false, is_system_reply: true, created_at: new Date().toISOString() });
+        await supabase.from('question_replies').insert({ 
+          question_id: questionData.id, 
+          reply: probationMessage, 
+          replied_by: 'Jarurat Care Foundation', 
+          is_hr_reply: false, 
+          is_system_reply: true, 
+          created_at: new Date().toISOString() 
+        });
       }
     }
 
-    await logTeamActivity('probation_meeting_scheduled', 'onboarding', id, { candidate_id: id, candidate_name: candidate.name || candidate.full_name, date: probationInput.date, startTime: probationInput.startTime, endTime: probationInput.endTime });
+    await logTeamActivity('probation_meeting_scheduled', 'onboarding', id, { 
+      candidate_id: id, 
+      candidate_name: candidate.name || candidate.full_name, 
+      date: probationInput.date, 
+      startTime: probationInput.startTime, 
+      endTime: probationInput.endTime 
+    });
 
     alert(`✅ Probation meeting scheduled successfully for ${timeSlotDisplay} on ${formatDateDisplay(probationInput.date)}!`);
     setProbationInput({ date: '', startTime: '', endTime: '', link: '' });
     fetchCompleteProfile();
+  }
+
+  // ===== HANDLE RESCHEDULE PROBATION MEETING =====
+  async function handleRescheduleProbationMeeting() {
+    const { date, startTime, endTime, link, reason } = rescheduleProbationData;
+    if (!date || !startTime || !endTime || !link) {
+      alert("Please specify the date, start time, end time, and meeting link.");
+      return;
+    }
+    if (startTime >= endTime) {
+      alert("End time must be after start time.");
+      return;
+    }
+
+    try {
+      const startDateTime = new Date(`${date}T${startTime}:00+05:30`);
+      const endDateTime = new Date(`${date}T${endTime}:00+05:30`);
+      const timeSlotDisplay = `${formatTimeForDisplay(startTime)} - ${formatTimeForDisplay(endTime)}`;
+
+      // Get old meeting details for logging
+      const oldDate = onboarding?.probation_meeting_date ? new Date(onboarding.probation_meeting_date).toISOString().split('T')[0] : 'N/A';
+      const oldTime = onboarding?.probation_meeting_date ? new Date(onboarding.probation_meeting_date).toTimeString().slice(0, 5) : 'N/A';
+      const oldLink = onboarding?.probation_meeting_link || 'N/A';
+
+      const { error } = await supabase
+        .from('onboarding')
+        .update({
+          probation_meeting_date: startDateTime.toISOString(),
+          probation_meeting_end: endDateTime.toISOString(),
+          probation_meeting_link: link,
+          probation_meeting_scheduled: true,
+          probation_meeting_rescheduled: true
+        })
+        .eq('candidate_id', id);
+
+      if (error) {
+        alert(`Failed to reschedule probation meeting: ${error.message}`);
+        return;
+      }
+
+      // ===== LOG PROBATION MEETING RESCHEDULED WITH DETAILS =====
+      await logTeamActivity(
+        'probation_meeting_rescheduled',
+        'onboarding',
+        id,
+        {
+          candidate_id: id,
+          candidate_name: candidate.name || candidate.full_name,
+          old_date: oldDate,
+          old_time: oldTime,
+          old_link: oldLink,
+          new_date: date,
+          new_startTime: startTime,
+          new_endTime: endTime,
+          new_link: link,
+          reason: reason || 'Rescheduled by HR',
+          rescheduled_by: localStorage.getItem('userName') || 'HR'
+        }
+      );
+
+      // Notify candidate
+      const rescheduleMessage = `Dear ${candidate.name || 'Candidate'},\n\nYour probation meeting has been rescheduled.\n\nNew Meeting Details:\n📅 Date: ${formatDateDisplay(date)}\n⏰ Time: ${timeSlotDisplay} (IST)\n🔗 Meeting Link: ${link}\n\nPlease make yourself available at the new time. If you have any concerns, please reach out to the HR team.\n\nBest regards,\nHR Team\nJarurat Care Foundation`;
+      
+      const { error: questionError } = await supabase
+        .from('candidate_questions')
+        .insert({
+          candidate_id: id,
+          candidate_name: candidate.name || candidate.full_name,
+          candidate_email: candidate.email,
+          question: `📅 Probation Meeting Rescheduled`,
+          status: 'Replied',
+          is_public: false,
+          is_system_message: true,
+          created_at: new Date().toISOString()
+        });
+
+      if (!questionError) {
+        const { data: questionData } = await supabase
+          .from('candidate_questions')
+          .select('id')
+          .eq('candidate_id', id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        
+        if (questionData) {
+          await supabase
+            .from('question_replies')
+            .insert({
+              question_id: questionData.id,
+              reply: rescheduleMessage,
+              replied_by: 'Jarurat Care Foundation',
+              is_hr_reply: false,
+              is_system_reply: true,
+              created_at: new Date().toISOString()
+            });
+        }
+      }
+
+      alert(`✅ Probation meeting has been successfully rescheduled for ${timeSlotDisplay}!`);
+      setShowRescheduleProbationModal(false);
+      setRescheduleProbationData({
+        date: '',
+        startTime: '',
+        endTime: '',
+        link: '',
+        reason: ''
+      });
+      fetchCompleteProfile();
+    } catch (err) {
+      alert(`An unexpected error occurred: ${err.message}`);
+    }
   }
 
   function formatDateDisplay(dateStr) {
@@ -694,22 +1128,48 @@ function CandidateDetailsPage() {
     try { new URL(string); return true; } catch (_) { return false; }
   }
 
+  // ===== HANDLE GRADE INTERVIEW =====
   async function handleGradeInterview(interviewId, round, decision) {
     const metrics = roundGrades[interviewId] || {};
     const totalScore = Number((parseFloat(metrics.score1) || 0) + (parseFloat(metrics.score2) || 0) + (parseFloat(metrics.score3) || 0));
 
     const panelistName = localStorage.getItem('panelistName') || localStorage.getItem('userName') || localStorage.getItem('hrEmail') || 'Panelist';
-    let sqlUpdateParams = { p_interview_id: interviewId, p_result: decision, p_status: 'Evaluated', p_total_score: totalScore, p_round: round, p_s1: (parseFloat(metrics.score1) || 0), p_s2: (parseFloat(metrics.score2) || 0), p_s3: (parseFloat(metrics.score3) || 0) };
+    let sqlUpdateParams = { 
+      p_interview_id: interviewId, 
+      p_result: decision, 
+      p_status: 'Evaluated', 
+      p_total_score: totalScore, 
+      p_round: round, 
+      p_s1: (parseFloat(metrics.score1) || 0), 
+      p_s2: (parseFloat(metrics.score2) || 0), 
+      p_s3: (parseFloat(metrics.score3) || 0) 
+    };
 
     const { error } = await supabase.rpc('execute_interview_grade_update', sqlUpdateParams);
     if (error) { alert(`Failed to save scores: ${error.message}`); return; }
 
     const actionType = decision === 'Selected' ? 'candidate_selected' : decision === 'Rejected' ? 'candidate_rejected' : 'candidate_hold';
-    await logTeamActivity(actionType, 'interview', interviewId, { candidate_id: id, candidate_name: candidate.name || candidate.full_name, round: round, total_score: totalScore, panelist: panelistName, s1: sqlUpdateParams.p_s1, s2: sqlUpdateParams.p_s2, s3: sqlUpdateParams.p_s3 });
+    
+    await logTeamActivity(actionType, 'interview', interviewId, { 
+      candidate_id: id, 
+      candidate_name: candidate.name || candidate.full_name, 
+      round: round, 
+      total_score: totalScore, 
+      panelist: panelistName, 
+      s1: sqlUpdateParams.p_s1, 
+      s2: sqlUpdateParams.p_s2, 
+      s3: sqlUpdateParams.p_s3,
+      decision: decision,
+      evaluated_by: localStorage.getItem('userName') || 'HR'
+    });
 
     const r1Total = Number(interviews.find(iv => iv.round === 'R1')?.total_score) || (round === 'R1' ? totalScore : 0);
     const r2Total = Number(interviews.find(iv => iv.round === 'R2')?.total_score) || (round === 'R2' ? totalScore : 0);
-    await supabase.from('candidates').update({ r1_score: r1Total, r2_score: r2Total, final_interview_score: r1Total + r2Total }).eq('id', id);
+    await supabase.from('candidates').update({ 
+      r1_score: r1Total, 
+      r2_score: r2Total, 
+      final_interview_score: r1Total + r2Total 
+    }).eq('id', id);
 
     if (decision === 'Rejected') {
       await supabase.from('candidates').update({ current_stage: 'Rejected' }).eq('id', id);
@@ -723,14 +1183,24 @@ function CandidateDetailsPage() {
         await supabase.from('candidates').update({ r1_status: 'Passed' }).eq('id', id);
         if (candidate.source?.toLowerCase() === 'referral') {
           await supabase.from('candidates').update({ current_stage: 'Selected' }).eq('id', id);
-          await supabase.from('onboarding').upsert({ candidate_id: id, onboarding_status: 'Pending', probation_status: 'Pending', probation_meeting_scheduled: false }, { onConflict: 'candidate_id' });
+          await supabase.from('onboarding').upsert({ 
+            candidate_id: id, 
+            onboarding_status: 'Pending', 
+            probation_status: 'Pending', 
+            probation_meeting_scheduled: false 
+          }, { onConflict: 'candidate_id' });
           alert("Round 1 Cleared! (Referral) Proceeding directly to Selected.");
         } else {
           alert("Round 1 Cleared! You may now schedule Round 2.");
         }
       } else if (round === 'R2') {
         await supabase.from('candidates').update({ current_stage: 'Selected' }).eq('id', id);
-        await supabase.from('onboarding').upsert({ candidate_id: id, onboarding_status: 'Pending', probation_status: 'Pending', probation_meeting_scheduled: false }, { onConflict: 'candidate_id' });
+        await supabase.from('onboarding').upsert({ 
+          candidate_id: id, 
+          onboarding_status: 'Pending', 
+          probation_status: 'Pending', 
+          probation_meeting_scheduled: false 
+        }, { onConflict: 'candidate_id' });
         alert("Final Round Cleared! Candidate moved to Selected.");
       }
     }
@@ -753,13 +1223,28 @@ function CandidateDetailsPage() {
       const endDateTime = new Date(`${scheduleInput.date}T${scheduleInput.endTime}:00+05:30`);
       const timeSlotDisplay = `${formatTimeForDisplay(scheduleInput.startTime)} - ${formatTimeForDisplay(scheduleInput.endTime)}`;
 
-      const updateData = { scheduled_date_time: startDateTime.toISOString(), scheduled_end_time: endDateTime.toISOString(), time_slot: timeSlotDisplay, meeting_link: scheduleInput.link, status: 'Scheduled', result: 'Pending' };
+      const updateData = { 
+        scheduled_date_time: startDateTime.toISOString(), 
+        scheduled_end_time: endDateTime.toISOString(), 
+        time_slot: timeSlotDisplay, 
+        meeting_link: scheduleInput.link, 
+        status: 'Scheduled', 
+        result: 'Pending' 
+      };
       if (scheduleInput.panel?.trim()) updateData.panelists = [scheduleInput.panel.trim()];
 
       const { error: updateError } = await supabase.from('interviews').update(updateData).eq('id', interviewId).select();
       if (updateError) { alert(`Failed to update interview: ${updateError.message}`); return; }
 
-      await logTeamActivity('interview_rescheduled_by_hr', 'interview', interviewId, { candidate_id: id, candidate_name: candidate.name || candidate.full_name, new_date: scheduleInput.date, new_startTime: scheduleInput.startTime, new_endTime: scheduleInput.endTime, panel: scheduleInput.panel, reason: 'Rescheduled by HR via old flow' });
+      await logTeamActivity('interview_rescheduled_by_hr', 'interview', interviewId, { 
+        candidate_id: id, 
+        candidate_name: candidate.name || candidate.full_name, 
+        new_date: scheduleInput.date, 
+        new_startTime: scheduleInput.startTime, 
+        new_endTime: scheduleInput.endTime, 
+        panel: scheduleInput.panel, 
+        reason: 'Rescheduled by HR via old flow' 
+      });
       await supabase.from('interview_reschedule_requests').delete().eq('interview_id', interviewId).eq('status', 'Pending');
 
       alert(`The interview has been successfully rescheduled for ${timeSlotDisplay}.`);
@@ -769,8 +1254,27 @@ function CandidateDetailsPage() {
   }
 
   // Styles
-  const inputStyle = { width: '100%', padding: '12px 16px', boxSizing: 'border-box', border: '1px solid var(--glass-border)', borderRadius: '8px', outline: 'none', fontSize: '14px', backgroundColor: 'rgba(255, 255, 255, 0.05)', color: '#fff', transition: 'all 0.2s', fontFamily: 'inherit' };
-  const labelStyle = { display: 'block', textAlign: 'left', fontSize: '13px', fontWeight: '500', color: 'var(--text-muted)', marginBottom: '6px' };
+  const inputStyle = { 
+    width: '100%', 
+    padding: '12px 16px', 
+    boxSizing: 'border-box', 
+    border: '1px solid var(--glass-border)', 
+    borderRadius: '8px', 
+    outline: 'none', 
+    fontSize: '14px', 
+    backgroundColor: 'rgba(255, 255, 255, 0.05)', 
+    color: '#fff', 
+    transition: 'all 0.2s', 
+    fontFamily: 'inherit' 
+  };
+  const labelStyle = { 
+    display: 'block', 
+    textAlign: 'left', 
+    fontSize: '13px', 
+    fontWeight: '500', 
+    color: 'var(--text-muted)', 
+    marginBottom: '6px' 
+  };
 
   if (!candidate) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-dark)' }}>
@@ -809,7 +1313,11 @@ function CandidateDetailsPage() {
   const showProbationMeeting = candidate.current_stage === 'Selected' && onboarding && onboarding.probation_meeting_scheduled !== true;
   const showProbationManagement = (candidate.current_stage === 'Selected' || candidate.current_stage === 'Probation') && onboarding && onboarding.probation_meeting_scheduled === true;
   const isOnWaitlist = candidate.current_stage === 'Waitlist';
-  const probationMeetingDetails = !onboarding ? null : { date: onboarding.probation_meeting_date, end: onboarding.probation_meeting_end, link: onboarding.probation_meeting_link };
+  const probationMeetingDetails = !onboarding ? null : { 
+    date: onboarding.probation_meeting_date, 
+    end: onboarding.probation_meeting_end, 
+    link: onboarding.probation_meeting_link 
+  };
   const hasValidLink = assignment?.submitted_link && isValidUrl(assignment.submitted_link);
   const hasFiles = uploadedFiles.length > 0;
 
@@ -856,14 +1364,25 @@ function CandidateDetailsPage() {
             <div style={{ display: 'flex', gap: '12px' }}>
               <button onClick={async () => {
                 if (!overrideReason.trim()) { alert('Please enter override reason'); return; }
-                await logTeamActivity('candidate_force_scheduled', 'candidate', id, { candidate_id: id, candidate_name: candidate.name || candidate.full_name, reason: overrideReason.trim(), assignment_score: calculatedAssignmentScore, action: 'Force Schedule R1' });
+                await logTeamActivity('candidate_force_scheduled', 'candidate', id, { 
+                  candidate_id: id, 
+                  candidate_name: candidate.name || candidate.full_name, 
+                  reason: overrideReason.trim(), 
+                  assignment_score: calculatedAssignmentScore, 
+                  action: 'Force Schedule R1' 
+                });
                 await supabase.from('assignments').update({ hr_scorecard_approved: true, hr_scorecard_remarks: overrideReason }).eq('candidate_id', id);
                 await supabase.from('candidates').update({ current_stage: 'Interview' }).eq('id', id); 
                 alert('Candidate manually selected. HR can now schedule R1.'); fetchCompleteProfile();
               }} className="btn-premium">Force Schedule R1</button>
               
               <button onClick={async () => {
-                await logTeamActivity('candidate_rejected_low_score', 'candidate', id, { candidate_id: id, candidate_name: candidate.name || candidate.full_name, assignment_score: calculatedAssignmentScore, reason: overrideReason.trim() || 'Score below threshold' });
+                await logTeamActivity('candidate_rejected_low_score', 'candidate', id, { 
+                  candidate_id: id, 
+                  candidate_name: candidate.name || candidate.full_name, 
+                  assignment_score: calculatedAssignmentScore, 
+                  reason: overrideReason.trim() || 'Score below threshold' 
+                });
                 await supabase.from('candidates').update({ current_stage: 'Rejected' }).eq('id', id);
                 alert('Candidate rejected.'); fetchCompleteProfile();
               }} className="btn-glass" style={{ color: '#fca5a5', borderColor: 'rgba(239, 68, 68, 0.3)' }}>Reject Candidate</button>
@@ -876,64 +1395,478 @@ function CandidateDetailsPage() {
           {/* LEFT COLUMN */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             
-            {/* Candidate Profile */}
+            {/* Candidate Profile with Edit Functionality */}
             <div className="glass-panel" style={{ padding: '30px' }}>
-              <h2 style={{ margin: '0 0 20px 0', color: '#fff', fontSize: '22px', fontWeight: '800' }}>Candidate Profile</h2>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h2 style={{ margin: 0, color: '#fff', fontSize: '22px', fontWeight: '800' }}>Candidate Profile</h2>
+                <button 
+                  onClick={() => {
+                    const newEditState = !isEditingProfile;
+                    setIsEditingProfile(newEditState);
+                    if (newEditState) {
+                      setEditProfileData({
+                        name: candidate.name || candidate.full_name || '',
+                        email: candidate.email || '',
+                        phone: candidate.phone || '',
+                        domain: candidate.domain || '',
+                        source: candidate.source || '',
+                        college_name: candidate.college_name || '',
+                        degree_course: candidate.degree_course || '',
+                        graduation_year: candidate.graduation_year || '',
+                        address: candidate.address || '',
+                        linkedin_profile: candidate.linkedin_profile || '',
+                        portfolio_link: candidate.portfolio_link || '',
+                        referrer_name: referralData?.referrer_name || '',
+                        referrer_contact: referralData?.referrer_contact || '',
+                        other_source: candidate.source && !standardSources.includes(candidate.source) ? candidate.source : '',
+                      });
+                    }
+                  }}
+                  className="btn-glass"
+                  style={{ padding: '6px 16px', fontSize: '13px' }}
+                >
+                  {isEditingProfile ? 'Cancel' : '✏️ Edit'}
+                </button>
+              </div>
               
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px', marginBottom: '20px' }}>
-                <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Name: <strong style={{color: '#fff'}}>{candidate.name || candidate.full_name}</strong></p>
-                <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Email: <strong style={{color: '#fff'}}>{candidate.email}</strong></p>
-                <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Phone: <strong style={{color: '#fff'}}>{candidate.phone}</strong></p>
-                <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Domain: <strong style={{color: '#fff'}}>{candidate.domain}</strong></p>
-                <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Source: <strong style={{color: '#fff'}}>{candidate.source}</strong></p>
-                <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  Stage: 
-                  <span style={{ padding: '4px 12px', borderRadius: '20px', background: 'rgba(255,255,255,0.1)', color: '#60a5fa', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase' }}>
-                    {candidate.current_stage}
-                  </span>
-                </p>
-              </div>
-
-              {(candidate.college_name || candidate.degree_course || candidate.graduation_year) && (
-                <>
-                  <div style={{ height: '1px', background: 'var(--glass-border)', margin: '20px 0' }} />
-                  <h4 style={{ margin: '0 0 12px 0', color: 'var(--text-muted)', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>🎓 Education</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px' }}>
-                    {candidate.college_name && <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>College: <strong style={{color: '#fff'}}>{candidate.college_name}</strong></p>}
-                    {candidate.degree_course && <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Degree: <strong style={{color: '#fff'}}>{candidate.degree_course}</strong></p>}
-                    {candidate.graduation_year && <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Grad. Year: <strong style={{color: '#fff'}}>{candidate.graduation_year}</strong></p>}
+              {isEditingProfile ? (
+                // ===== EDIT MODE =====
+                <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px', marginBottom: '20px' }}>
+                    <div>
+                      <label style={labelStyle}>Name</label>
+                      <input
+                        type="text"
+                        value={editProfileData.name}
+                        onChange={(e) => setEditProfileData({...editProfileData, name: e.target.value})}
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Email</label>
+                      <input
+                        type="email"
+                        value={editProfileData.email}
+                        onChange={(e) => setEditProfileData({...editProfileData, email: e.target.value})}
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Phone</label>
+                      <input
+                        type="text"
+                        value={editProfileData.phone}
+                        onChange={(e) => setEditProfileData({...editProfileData, phone: e.target.value})}
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Domain</label>
+                      <select
+                        value={editProfileData.domain}
+                        onChange={(e) => setEditProfileData({...editProfileData, domain: e.target.value})}
+                        style={{...inputStyle, cursor: 'pointer', color: editProfileData.domain ? '#fff' : '#94a3b8'}}
+                      >
+                        <option value="" style={{ color: '#94a3b8' }}>Select Domain</option>
+                        {domains.map(d => (
+                          <option key={d} value={d} style={{ color: '#000' }}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Source</label>
+                      <select
+                        value={editProfileData.source}
+                        onChange={(e) => {
+                          const newSource = e.target.value;
+                          setEditProfileData({
+                            ...editProfileData,
+                            source: newSource,
+                            other_source: newSource === 'Other' ? editProfileData.other_source : '',
+                          });
+                        }}
+                        style={{...inputStyle, cursor: 'pointer', color: editProfileData.source ? '#fff' : '#94a3b8'}}
+                      >
+                        <option value="" style={{ color: '#94a3b8' }}>Select Source</option>
+                        <option value="Internshala" style={{ color: '#000' }}>Internshala</option>
+                        <option value="Referral" style={{ color: '#000' }}>Referral</option>
+                        <option value="Wellfound" style={{ color: '#000' }}>Wellfound</option>
+                        <option value="Indeed" style={{ color: '#000' }}>Indeed</option>
+                        <option value="College Outreach" style={{ color: '#000' }}>College Outreach</option>
+                        <option value="Social Media" style={{ color: '#000' }}>Social Media</option>
+                        <option value="Other" style={{ color: '#000' }}>Other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={labelStyle}>College/University</label>
+                      <input
+                        type="text"
+                        value={editProfileData.college_name}
+                        onChange={(e) => setEditProfileData({...editProfileData, college_name: e.target.value})}
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Degree/Course</label>
+                      <input
+                        type="text"
+                        value={editProfileData.degree_course}
+                        onChange={(e) => setEditProfileData({...editProfileData, degree_course: e.target.value})}
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Graduation Year</label>
+                      <input
+                        type="number"
+                        value={editProfileData.graduation_year}
+                        onChange={(e) => setEditProfileData({...editProfileData, graduation_year: e.target.value})}
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <label style={labelStyle}>Address</label>
+                      <input
+                        type="text"
+                        value={editProfileData.address}
+                        onChange={(e) => setEditProfileData({...editProfileData, address: e.target.value})}
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>LinkedIn Profile</label>
+                      <input
+                        type="url"
+                        placeholder="https://linkedin.com/in/..."
+                        value={editProfileData.linkedin_profile}
+                        onChange={(e) => setEditProfileData({...editProfileData, linkedin_profile: e.target.value})}
+                        style={inputStyle}
+                        onBlur={(e) => {
+                          if (e.target.value && !urlRegex.test(e.target.value)) {
+                            alert('Please enter a valid LinkedIn URL');
+                          }
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Portfolio Link</label>
+                      <input
+                        type="url"
+                        placeholder="https://..."
+                        value={editProfileData.portfolio_link}
+                        onChange={(e) => setEditProfileData({...editProfileData, portfolio_link: e.target.value})}
+                        style={inputStyle}
+                        onBlur={(e) => {
+                          if (e.target.value && !urlRegex.test(e.target.value)) {
+                            alert('Please enter a valid Portfolio URL');
+                          }
+                        }}
+                      />
+                    </div>
                   </div>
-                </>
-              )}
 
-              {(candidate.address || candidate.linkedin_profile || candidate.portfolio_link) && (
-                <>
-                  <div style={{ height: '1px', background: 'var(--glass-border)', margin: '20px 0' }} />
-                  <h4 style={{ margin: '0 0 12px 0', color: 'var(--text-muted)', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>📍 Links & Location</h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {candidate.address && <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Address: <strong style={{color: '#fff'}}>{candidate.address}</strong></p>}
-                    {candidate.linkedin_profile && <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>LinkedIn: <a href={candidate.linkedin_profile} target="_blank" rel="noreferrer" style={{ color: '#60a5fa', textDecoration: 'none' }}>{candidate.linkedin_profile}</a></p>}
-                    {candidate.portfolio_link && <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Portfolio: <a href={candidate.portfolio_link} target="_blank" rel="noreferrer" style={{ color: '#60a5fa', textDecoration: 'none' }}>{candidate.portfolio_link}</a></p>}
+                  {/* Source-specific fields in edit mode */}
+                  {editProfileData.source === 'Referral' && (
+                    <div style={{
+                      padding: '16px',
+                      background: 'rgba(16, 185, 129, 0.05)',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(16, 185, 129, 0.2)',
+                      marginBottom: '20px'
+                    }}>
+                      <div style={{ fontSize: '13px', color: '#6ee7b7', marginBottom: '12px', fontWeight: '600' }}>
+                        🤝 Referral Details
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div>
+                          <label style={labelStyle}>Referrer Name</label>
+                          <input
+                            type="text"
+                            value={editProfileData.referrer_name}
+                            onChange={(e) => setEditProfileData({...editProfileData, referrer_name: e.target.value})}
+                            style={inputStyle}
+                          />
+                        </div>
+                        <div>
+                          <label style={labelStyle}>Referrer Contact</label>
+                          <input
+                            type="text"
+                            value={editProfileData.referrer_contact}
+                            onChange={(e) => setEditProfileData({...editProfileData, referrer_contact: e.target.value})}
+                            style={inputStyle}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {editProfileData.source === 'Other' && (
+                    <div style={{
+                      padding: '16px',
+                      background: 'rgba(245, 158, 11, 0.05)',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(245, 158, 11, 0.2)',
+                      marginBottom: '20px'
+                    }}>
+                      <div style={{ fontSize: '13px', color: '#fbbf24', marginBottom: '12px', fontWeight: '600' }}>
+                        📝 Specify Source
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Source Name</label>
+                        <input
+                          type="text"
+                          placeholder="Enter source name"
+                          value={editProfileData.other_source}
+                          onChange={(e) => setEditProfileData({...editProfileData, other_source: e.target.value})}
+                          style={inputStyle}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+                    <button
+                      onClick={async () => {
+                        try {
+                          // Validate URL fields
+                          if (editProfileData.linkedin_profile && !urlRegex.test(editProfileData.linkedin_profile.trim())) {
+                            alert('Please enter a valid LinkedIn URL');
+                            return;
+                          }
+                          if (editProfileData.portfolio_link && !urlRegex.test(editProfileData.portfolio_link.trim())) {
+                            alert('Please enter a valid Portfolio URL');
+                            return;
+                          }
+
+                          // Determine final source value
+                          let finalSource = editProfileData.source;
+                          if (editProfileData.source === 'Other' && editProfileData.other_source.trim()) {
+                            finalSource = editProfileData.other_source.trim();
+                          }
+
+                          const updateData = {
+                            name: editProfileData.name.trim(),
+                            email: editProfileData.email.trim(),
+                            phone: editProfileData.phone.trim() || null,
+                            domain: editProfileData.domain,
+                            source: finalSource,
+                            college_name: editProfileData.college_name.trim() || null,
+                            degree_course: editProfileData.degree_course.trim() || null,
+                            graduation_year: editProfileData.graduation_year ? parseInt(editProfileData.graduation_year) : null,
+                            address: editProfileData.address.trim() || null,
+                            linkedin_profile: editProfileData.linkedin_profile.trim() || null,
+                            portfolio_link: editProfileData.portfolio_link.trim() || null,
+                          };
+                          
+                          // Track what changed for detailed logging
+                          const changes = [];
+                          const oldValues = {};
+                          const newValues = {};
+                          
+                          Object.keys(updateData).forEach(key => {
+                            const oldVal = candidate[key] || '';
+                            const newVal = updateData[key] || '';
+                            if (oldVal !== newVal) {
+                              changes.push(key);
+                              oldValues[key] = oldVal;
+                              newValues[key] = newVal;
+                            }
+                          });
+
+                          const { error } = await supabase
+                            .from('candidates')
+                            .update(updateData)
+                            .eq('id', candidate.id);
+                          
+                          if (error) {
+                            alert('Failed to update profile: ' + error.message);
+                            return;
+                          }
+
+                          // ===== LOG DETAILED PROFILE CHANGES =====
+                          if (changes.length > 0) {
+                            // Create a readable summary of changes
+                            const changeSummary = changes.map(key => {
+                              const label = fieldLabels[key] || key;
+                              const oldVal = oldValues[key] || 'N/A';
+                              const newVal = newValues[key] || 'N/A';
+                              return `${label}: "${oldVal}" → "${newVal}"`;
+                            }).join('; ');
+
+                            await logTeamActivity(
+                              'profile_updated',
+                              'candidate',
+                              candidate.id,
+                              {
+                                candidate_id: candidate.id,
+                                candidate_name: candidate.name || candidate.full_name,
+                                updated_fields: changes,
+                                old_values: oldValues,
+                                new_values: newValues,
+                                change_summary: changeSummary,
+                                updated_by: localStorage.getItem('userName') || 'HR'
+                              }
+                            );
+                          }
+
+                          // Update referral data if source is Referral
+                          if (editProfileData.source === 'Referral') {
+                            const referralUpdateData = {
+                              referrer_name: editProfileData.referrer_name.trim(),
+                              referrer_contact: editProfileData.referrer_contact.trim(),
+                              candidate_name: editProfileData.name.trim(),
+                              candidate_email: editProfileData.email.trim(),
+                            };
+                            
+                            if (referralData) {
+                              await supabase
+                                .from('referrals')
+                                .update(referralUpdateData)
+                                .eq('candidate_id', candidate.id);
+                            } else {
+                              await supabase
+                                .from('referrals')
+                                .insert({
+                                  candidate_id: candidate.id,
+                                  ...referralUpdateData,
+                                  status: 'Pending'
+                                });
+                            }
+                          }
+
+                          // If source changed from Referral to something else, remove referral
+                          if (candidate.source === 'Referral' && editProfileData.source !== 'Referral') {
+                            await supabase
+                              .from('referrals')
+                              .delete()
+                              .eq('candidate_id', candidate.id);
+                          }
+                          
+                          alert(`✅ Profile updated successfully! ${changes.length} field(s) changed.`);
+                          setIsEditingProfile(false);
+                          fetchCompleteProfile();
+                        } catch (error) {
+                          alert('Error updating profile: ' + error.message);
+                        }
+                      }}
+                      className="btn-premium"
+                      style={{ flex: 1 }}
+                    >
+                      Save Changes
+                    </button>
+                    <button
+                      onClick={() => setIsEditingProfile(false)}
+                      className="btn-glass"
+                      style={{ flex: 1 }}
+                    >
+                      Cancel
+                    </button>
                   </div>
-                </>
-              )}
+                </div>
+              ) : (
+                // ===== VIEW MODE =====
+                <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px', marginBottom: '20px' }}>
+                    <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Name: <strong style={{color: '#fff'}}>{candidate.name || candidate.full_name || 'N/A'}</strong></p>
+                    <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Email: <strong style={{color: '#fff'}}>{candidate.email || 'N/A'}</strong></p>
+                    <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Phone: <strong style={{color: '#fff'}}>{candidate.phone || 'N/A'}</strong></p>
+                    <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Domain: <strong style={{color: '#fff'}}>{candidate.domain || 'N/A'}</strong></p>
+                    <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Source: <strong style={{color: '#fff'}}>{candidate.source || 'N/A'}</strong></p>
+                    <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      Stage: 
+                      <span style={{ padding: '4px 12px', borderRadius: '20px', background: 'rgba(255,255,255,0.1)', color: '#60a5fa', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase' }}>
+                        {candidate.current_stage || 'N/A'}
+                      </span>
+                    </p>
+                  </div>
 
-              <div style={{ height: '1px', background: 'var(--glass-border)', margin: '20px 0' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Resume:</span>
-                {candidate.resume_link ? (
-                  <button id="downloadResumeBtn" onClick={handleDownloadResume} disabled={downloadLoading} className="btn-glass" style={{ padding: '6px 16px', fontSize: '13px', opacity: downloadLoading ? 0.7 : 1 }}>
-                    {downloadLoading ? '⏳ Downloading...' : '📥 Download PDF'}
-                  </button>
-                ) : <span style={{ fontSize: '13px', color: '#fca5a5' }}>Not Uploaded</span>}
-              </div>
+                  {/* Show referral details in view mode */}
+                  {candidate.source === 'Referral' && referralData && (
+                    <>
+                      <div style={{ height: '1px', background: 'var(--glass-border)', margin: '20px 0' }} />
+                      <h4 style={{ margin: '0 0 12px 0', color: 'var(--text-muted)', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>🤝 Referral Details</h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px' }}>
+                        <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Referrer Name: <strong style={{color: '#fff'}}>{referralData.referrer_name || 'N/A'}</strong></p>
+                        <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Referrer Contact: <strong style={{color: '#fff'}}>{referralData.referrer_contact || 'N/A'}</strong></p>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Show source details for custom sources (Other, or any non-standard source) */}
+                  {candidate.source && !standardSources.includes(candidate.source) && (
+                    <>
+                      <div style={{ height: '1px', background: 'var(--glass-border)', margin: '20px 0' }} />
+                      <h4 style={{ margin: '0 0 12px 0', color: 'var(--text-muted)', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>📝 Source Details</h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px' }}>
+                        <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Source Name: <strong style={{color: '#fff'}}>{candidate.source}</strong></p>
+                      </div>
+                    </>
+                  )}
+
+                  {(candidate.college_name || candidate.degree_course || candidate.graduation_year) && (
+                    <>
+                      <div style={{ height: '1px', background: 'var(--glass-border)', margin: '20px 0' }} />
+                      <h4 style={{ margin: '0 0 12px 0', color: 'var(--text-muted)', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>🎓 Education</h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px' }}>
+                        {candidate.college_name && <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>College: <strong style={{color: '#fff'}}>{candidate.college_name}</strong></p>}
+                        {candidate.degree_course && <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Degree: <strong style={{color: '#fff'}}>{candidate.degree_course}</strong></p>}
+                        {candidate.graduation_year && <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Grad. Year: <strong style={{color: '#fff'}}>{candidate.graduation_year}</strong></p>}
+                      </div>
+                    </>
+                  )}
+
+                  {(candidate.address || candidate.linkedin_profile || candidate.portfolio_link) && (
+                    <>
+                      <div style={{ height: '1px', background: 'var(--glass-border)', margin: '20px 0' }} />
+                      <h4 style={{ margin: '0 0 12px 0', color: 'var(--text-muted)', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>📍 Links & Location</h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {candidate.address && <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Address: <strong style={{color: '#fff'}}>{candidate.address}</strong></p>}
+                        {candidate.linkedin_profile && <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>LinkedIn: <a href={candidate.linkedin_profile} target="_blank" rel="noreferrer" style={{ color: '#60a5fa', textDecoration: 'none' }}>{candidate.linkedin_profile}</a></p>}
+                        {candidate.portfolio_link && <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>Portfolio: <a href={candidate.portfolio_link} target="_blank" rel="noreferrer" style={{ color: '#60a5fa', textDecoration: 'none' }}>{candidate.portfolio_link}</a></p>}
+                      </div>
+                    </>
+                  )}
+
+                  <div style={{ height: '1px', background: 'var(--glass-border)', margin: '20px 0' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Resume:</span>
+                    {candidate.resume_link ? (
+                      <>
+                        <button id="downloadResumeBtn" onClick={handleDownloadResume} disabled={downloadLoading} className="btn-glass" style={{ padding: '6px 16px', fontSize: '13px', opacity: downloadLoading ? 0.7 : 1 }}>
+                          {downloadLoading ? '⏳ Downloading...' : '📥 Download PDF'}
+                        </button>
+                        <label className="btn-glass" style={{ padding: '6px 16px', fontSize: '13px', cursor: 'pointer', borderColor: 'rgba(16, 185, 129, 0.3)' }}>
+                          {uploadResumeLoading ? '⏳ Uploading...' : '📤 Replace'}
+                          <input
+                            type="file"
+                            accept=".pdf,application/pdf"
+                            onChange={handleUploadResume}
+                            disabled={uploadResumeLoading}
+                            style={{ display: 'none' }}
+                          />
+                        </label>
+                      </>
+                    ) : (
+                      <label className="btn-premium" style={{ padding: '6px 16px', fontSize: '13px', cursor: 'pointer' }}>
+                        {uploadResumeLoading ? '⏳ Uploading...' : '📤 Upload Resume'}
+                        <input
+                          type="file"
+                          accept=".pdf,application/pdf"
+                          onChange={handleUploadResume}
+                          disabled={uploadResumeLoading}
+                          style={{ display: 'none' }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Internal Notes */}
             <div className="glass-panel" style={{ padding: '30px' }}>
               <h3 style={{ margin: '0 0 16px 0', color: '#fff', fontSize: '18px', fontWeight: '700' }}>Internal Context Notes</h3>
               
-              {/* The Visual Read-Only Ledger */}
               <div style={{ 
                 background: 'rgba(0,0,0,0.2)', 
                 border: '1px solid var(--glass-border)', 
@@ -1059,7 +1992,12 @@ function CandidateDetailsPage() {
                     if (onHoldInterview) {
                       await supabase.from('interviews').update({ status: 'Pending', result: 'Pending' }).eq('id', onHoldInterview.id);
                       await supabase.from('candidates').update({ current_stage: 'Interview' }).eq('id', id);
-                      await logTeamActivity('candidate_restored_from_on_hold', 'candidate', id, { candidate_id: id, candidate_name: candidate.name || candidate.full_name, interview_id: onHoldInterview.id, round: onHoldInterview.round });
+                      await logTeamActivity('candidate_restored_from_on_hold', 'candidate', id, { 
+                        candidate_id: id, 
+                        candidate_name: candidate.name || candidate.full_name, 
+                        interview_id: onHoldInterview.id, 
+                        round: onHoldInterview.round 
+                      });
                       alert('✅ Restored to Interview stage.'); fetchCompleteProfile();
                     } else { alert('No on-hold interview found.'); }
                   }} className="btn-premium" style={{ width: '100%', marginBottom: '12px', background: '#f59e0b', color: '#000' }}>
@@ -1102,11 +2040,15 @@ function CandidateDetailsPage() {
 
               {(candidate.current_stage === 'Assignment' || (assignment && (candidate.current_stage === 'Interview' || candidate.current_stage === 'Selected' || candidate.current_stage === 'Probation' || isOnboardingLocked))) && (
                 <div style={{ marginBottom: '40px' }}>
-                  <h4 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#fff', fontWeight: '700' }}>Evaluation Board</h4>
+                  <h4 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#fff', fontWeight: '700' }}>Assignment Evaluation Board</h4>
                   
                   {assignment && (
                     <div style={{ background: isAssignmentLate() ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255,255,255,0.03)', padding: '20px', borderRadius: '12px', marginBottom: '20px', border: `1px solid ${isAssignmentLate() ? '#ef4444' : 'var(--glass-border)'}` }}>
-                      <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: 'var(--text-muted)' }}>Deadline: <span style={{color: '#fff'}}>{new Date(assignment.deadline).toLocaleString()}</span></p>
+                      {assignment.deadline && new Date(assignment.deadline).getFullYear() > 1970 && (
+                        <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: 'var(--text-muted)' }}>
+                          Deadline: <span style={{color: '#fff'}}>{new Date(assignment.deadline).toLocaleString()}</span>
+                        </p>
+                      )}
                       
                       {assignment.submitted_at && (
                         <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: isAssignmentLate() ? '#fca5a5' : '#6ee7b7' }}>
@@ -1115,7 +2057,9 @@ function CandidateDetailsPage() {
                       )}
                       
                       {candidate.assignment_score != null && (
-                        <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#6ee7b7', fontWeight: '600' }}>Calculated Grade: {candidate.assignment_score} Marks</p>
+                        <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#6ee7b7', fontWeight: '600' }}>
+                          Calculated Grade: {candidate.assignment_score} Marks
+                        </p>
                       )}
 
                       {(hasValidLink || hasFiles) && (
@@ -1177,65 +2121,77 @@ function CandidateDetailsPage() {
                     );
                   })()}
 
-                  {interviews.length > 0 && (
-                    <>
-                      <h4 style={{ margin: '0 0 16px 0', color: '#fff', fontSize: '16px', fontWeight: '700' }}>Active Interview Loops</h4>
-                      {interviews.map((iv) => {
-                        const g = roundGrades[iv.id] || { score1: '', score2: '', score3: '' };
-                        const total = (parseFloat(g.score1) || 0) + (parseFloat(g.score2) || 0) + (parseFloat(g.score3) || 0);
-                        
-                        let badgeBg = 'rgba(255,255,255,0.1)'; let badgeColor = '#e2e8f0'; let badgeText = iv.status || 'Pending';
-                        if (iv.result === 'Rejected') { badgeBg = 'rgba(239, 68, 68, 0.1)'; badgeColor = '#fca5a5'; badgeText = 'Rejected'; }
-                        else if (iv.status === 'On Hold' || iv.result === 'On Hold') { badgeBg = 'rgba(245, 158, 11, 0.1)'; badgeColor = '#fcd34d'; badgeText = 'On Hold'; }
-                        else if (iv.result === 'Selected') { badgeBg = 'rgba(16, 185, 129, 0.1)'; badgeColor = '#6ee7b7'; badgeText = 'Selected'; }
-                        else if (iv.status === 'Reschedule_Requested') { badgeBg = 'rgba(245, 158, 11, 0.1)'; badgeColor = '#fcd34d'; badgeText = 'Reschedule Req'; }
-                        else if (iv.status === 'Scheduled') { badgeBg = 'rgba(59, 130, 246, 0.1)'; badgeColor = '#93c5fd'; badgeText = 'Scheduled'; }
+                  {(() => {
+                    const scheduledInterviews = interviews.filter(iv => iv.scheduled_date_time);
+                    
+                    if (scheduledInterviews.length === 0) {
+                      return (
+                        <p style={{ color: 'var(--text-muted)', fontSize: '14px', textAlign: 'center', padding: '20px 0' }}>
+                          No interviews scheduled yet.
+                        </p>
+                      );
+                    }
+                    
+                    return (
+                      <>
+                        <h4 style={{ margin: '0 0 16px 0', color: '#fff', fontSize: '16px', fontWeight: '700' }}>Active Interview Loops</h4>
+                        {scheduledInterviews.map((iv) => {
+                          const g = roundGrades[iv.id] || { score1: '', score2: '', score3: '' };
+                          const total = (parseFloat(g.score1) || 0) + (parseFloat(g.score2) || 0) + (parseFloat(g.score3) || 0);
+                          
+                          let badgeBg = 'rgba(255,255,255,0.1)'; let badgeColor = '#e2e8f0'; let badgeText = iv.status || 'Pending';
+                          if (iv.result === 'Rejected') { badgeBg = 'rgba(239, 68, 68, 0.1)'; badgeColor = '#fca5a5'; badgeText = 'Rejected'; }
+                          else if (iv.status === 'On Hold' || iv.result === 'On Hold') { badgeBg = 'rgba(245, 158, 11, 0.1)'; badgeColor = '#fcd34d'; badgeText = 'On Hold'; }
+                          else if (iv.result === 'Selected') { badgeBg = 'rgba(16, 185, 129, 0.1)'; badgeColor = '#6ee7b7'; badgeText = 'Selected'; }
+                          else if (iv.status === 'Reschedule_Requested') { badgeBg = 'rgba(245, 158, 11, 0.1)'; badgeColor = '#fcd34d'; badgeText = 'Reschedule Req'; }
+                          else if (iv.status === 'Scheduled') { badgeBg = 'rgba(59, 130, 246, 0.1)'; badgeColor = '#93c5fd'; badgeText = 'Scheduled'; }
 
-                        return (
-                          <div key={iv.id} style={{ border: '1px solid var(--glass-border)', padding: '20px', borderRadius: '12px', marginBottom: '16px', background: 'rgba(255,255,255,0.02)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                              <span style={{ fontWeight: '800', color: '#60a5fa', fontSize: '16px', letterSpacing: '1px' }}>{iv.round}</span>
-                              <span style={{ padding: '6px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', backgroundColor: badgeBg, color: badgeColor, textTransform: 'uppercase' }}>{badgeText}</span>
-                            </div>
-                            
-                            {iv.panelists?.length > 0 && <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: 'var(--text-muted)' }}>Panel: <span style={{color: '#fff'}}>{iv.panelists.join(', ')}</span></p>}
-                            <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: 'var(--text-muted)' }}>Date: <span style={{color: '#fff'}}>{getFormattedDateIST(iv.scheduled_date_time)}</span></p>
-                            {getTimeSlotDisplay(iv) && <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: 'var(--text-muted)' }}>Time: <span style={{color: '#fff'}}>{getTimeSlotDisplay(iv)}</span></p>}
-                            
-                            {iv.result === 'Pending' && iv.status !== 'On Hold' && !isInterviewLocked && (
-                              <div style={{ marginBottom: '16px' }}><a href={iv.meeting_link} target="_blank" rel="noreferrer" className="btn-glass" style={{ textDecoration: 'none', fontSize: '13px', padding: '8px 16px' }}>🔗 Access Room</a></div>
-                            )}
-
-                            {iv.candidate_accepted && <div style={{ marginBottom: '16px', color: '#6ee7b7', fontSize: '13px', fontWeight: '600' }}>✅ Candidate Acknowledged</div>}
-
-                            {(iv.status === 'Scheduled' || iv.status === 'Reschedule_Requested') && iv.result === 'Pending' && !isInterviewLocked && (
-                              <button onClick={() => {
-                                let dateStr = ''; if (iv.scheduled_date_time) { dateStr = new Date(iv.scheduled_date_time).toISOString().split('T')[0]; }
-                                setHrRescheduleData({ interviewId: iv.id, panel: iv.panelists ? iv.panelists[0] : '', link: iv.meeting_link || '', date: dateStr, startTime: iv.scheduled_date_time ? new Date(iv.scheduled_date_time).toTimeString().slice(0, 5) : '', endTime: iv.scheduled_end_time ? new Date(iv.scheduled_end_time).toTimeString().slice(0, 5) : '', reason: '' });
-                                setShowHRRescheduleModal(true);
-                              }} className="btn-glass" style={{ padding: '8px 16px', fontSize: '12px', marginBottom: '16px' }}>🔄 Reschedule</button>
-                            )}
-
-                            {iv.result === 'Pending' && iv.status !== 'On Hold' && !isInterviewLocked && (
-                              <div style={{ background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-                                  <div><label style={labelStyle}>{iv.round === 'R1' ? 'Domain' : 'Tech'}</label><input type="number" value={g.score1} onChange={(e) => setRoundGrades({...roundGrades, [iv.id]: {...g, score1: e.target.value}})} style={inputStyle} /></div>
-                                  <div><label style={labelStyle}>{iv.round === 'R1' ? 'Comm' : 'Problem'}</label><input type="number" value={g.score2} onChange={(e) => setRoundGrades({...roundGrades, [iv.id]: {...g, score2: e.target.value}})} style={inputStyle} /></div>
-                                  <div><label style={labelStyle}>{iv.round === 'R1' ? 'Avail.' : 'Culture'}</label><input type="number" value={g.score3} onChange={(e) => setRoundGrades({...roundGrades, [iv.id]: {...g, score3: e.target.value}})} style={inputStyle} /></div>
-                                </div>
-                                <p style={{ color: '#fff', fontWeight: '700', marginBottom: '16px', fontSize: '14px' }}>Calculated Total: {total}</p>
-                                <div style={{ display: 'flex', gap: '12px' }}>
-                                  <button onClick={() => handleGradeInterview(iv.id, iv.round, 'Selected')} className="btn-premium" style={{ flex: 1, padding: '10px', fontSize: '13px', background: '#10b981' }}>Pass</button>
-                                  <button onClick={() => handleGradeInterview(iv.id, iv.round, 'Rejected')} className="btn-premium" style={{ flex: 1, padding: '10px', fontSize: '13px', background: '#ef4444' }}>Reject</button>
-                                  <button onClick={() => handleGradeInterview(iv.id, iv.round, 'On Hold')} className="btn-premium" style={{ flex: 1, padding: '10px', fontSize: '13px', background: '#f59e0b', color: '#000' }}>Hold</button>
-                                </div>
+                          return (
+                            <div key={iv.id} style={{ border: '1px solid var(--glass-border)', padding: '20px', borderRadius: '12px', marginBottom: '16px', background: 'rgba(255,255,255,0.02)' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <span style={{ fontWeight: '800', color: iv.round === 'R1' ? '#60a5fa' : '#c084fc', fontSize: '16px', letterSpacing: '1px' }}>{iv.round === 'R1' ? '🎯 Interview Round 1' : '🚀 Interview Round 2'}</span>
+                                <span style={{ padding: '6px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', backgroundColor: badgeBg, color: badgeColor, textTransform: 'uppercase' }}>{badgeText}</span>
                               </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </>
-                  )}
+                              
+                              {iv.panelists?.length > 0 && <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: 'var(--text-muted)' }}>Panel: <span style={{color: '#fff'}}>{iv.panelists.join(', ')}</span></p>}
+                              <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: 'var(--text-muted)' }}>Date: <span style={{color: '#fff'}}>{getFormattedDateIST(iv.scheduled_date_time)}</span></p>
+                              {getTimeSlotDisplay(iv) && <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: 'var(--text-muted)' }}>Time: <span style={{color: '#fff'}}>{getTimeSlotDisplay(iv)}</span></p>}
+                              
+                              {iv.result === 'Pending' && iv.status !== 'On Hold' && !isInterviewLocked && (
+                                <div style={{ marginBottom: '16px' }}><a href={iv.meeting_link} target="_blank" rel="noreferrer" className="btn-glass" style={{ textDecoration: 'none', fontSize: '13px', padding: '8px 16px' }}>🔗 Access Room</a></div>
+                              )}
+
+                              {iv.candidate_accepted && <div style={{ marginBottom: '16px', color: '#6ee7b7', fontSize: '13px', fontWeight: '600' }}>✅ Candidate Acknowledged</div>}
+
+                              {(iv.status === 'Scheduled' || iv.status === 'Reschedule_Requested') && iv.result === 'Pending' && !isInterviewLocked && (
+                                <button onClick={() => {
+                                  let dateStr = ''; if (iv.scheduled_date_time) { dateStr = new Date(iv.scheduled_date_time).toISOString().split('T')[0]; }
+                                  setHrRescheduleData({ interviewId: iv.id, panel: iv.panelists ? iv.panelists[0] : '', link: iv.meeting_link || '', date: dateStr, startTime: iv.scheduled_date_time ? new Date(iv.scheduled_date_time).toTimeString().slice(0, 5) : '', endTime: iv.scheduled_end_time ? new Date(iv.scheduled_end_time).toTimeString().slice(0, 5) : '', reason: '' });
+                                  setShowHRRescheduleModal(true);
+                                }} className="btn-glass" style={{ padding: '8px 16px', fontSize: '12px', marginBottom: '16px' }}>🔄 Reschedule</button>
+                              )}
+
+                              {iv.result === 'Pending' && iv.status !== 'On Hold' && !isInterviewLocked && (
+                                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                                    <div><label style={labelStyle}>{iv.round === 'R1' ? 'Domain' : 'Tech'}</label><input type="number" value={g.score1} onChange={(e) => setRoundGrades({...roundGrades, [iv.id]: {...g, score1: e.target.value}})} style={inputStyle} /></div>
+                                    <div><label style={labelStyle}>{iv.round === 'R1' ? 'Comm' : 'Problem'}</label><input type="number" value={g.score2} onChange={(e) => setRoundGrades({...roundGrades, [iv.id]: {...g, score2: e.target.value}})} style={inputStyle} /></div>
+                                    <div><label style={labelStyle}>{iv.round === 'R1' ? 'Avail.' : 'Culture'}</label><input type="number" value={g.score3} onChange={(e) => setRoundGrades({...roundGrades, [iv.id]: {...g, score3: e.target.value}})} style={inputStyle} /></div>
+                                  </div>
+                                  <p style={{ color: '#fff', fontWeight: '700', marginBottom: '16px', fontSize: '14px' }}>Calculated Total: {total}</p>
+                                  <div style={{ display: 'flex', gap: '12px' }}>
+                                    <button onClick={() => handleGradeInterview(iv.id, iv.round, 'Selected')} className="btn-premium" style={{ flex: 1, padding: '10px', fontSize: '13px', background: '#10b981' }}>Pass</button>
+                                    <button onClick={() => handleGradeInterview(iv.id, iv.round, 'Rejected')} className="btn-premium" style={{ flex: 1, padding: '10px', fontSize: '13px', background: '#ef4444' }}>Reject</button>
+                                    <button onClick={() => handleGradeInterview(iv.id, iv.round, 'On Hold')} className="btn-premium" style={{ flex: 1, padding: '10px', fontSize: '13px', background: '#f59e0b', color: '#000' }}>Hold</button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </>
+                    );
+                  })()}
 
                   {(candidate.current_stage !== 'Assignment' && (r1TotalScore > 0 || r2TotalScore > 0)) && (
                     <div style={{ marginTop: '24px', padding: '20px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '12px', border: '1px solid rgba(16, 185, 129, 0.3)', textAlign: 'center' }}>
@@ -1272,10 +2228,31 @@ function CandidateDetailsPage() {
                   
                   {probationMeetingDetails && (
                     <div style={{ marginBottom: '20px', padding: '16px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
-                      <p style={{ margin: '0 0 8px 0', fontWeight: '600', fontSize: '14px', color: '#c4b5fd' }}>Scheduled Orientation</p>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                        <p style={{ margin: 0, fontWeight: '600', fontSize: '14px', color: '#c4b5fd' }}>Scheduled Orientation</p>
+                        <button
+                          onClick={() => {
+                            const meetingDate = probationMeetingDetails.date ? new Date(probationMeetingDetails.date) : null;
+                            setRescheduleProbationData({
+                              date: meetingDate ? meetingDate.toISOString().split('T')[0] : '',
+                              startTime: meetingDate ? meetingDate.toTimeString().slice(0, 5) : '',
+                              endTime: probationMeetingDetails.end ? new Date(probationMeetingDetails.end).toTimeString().slice(0, 5) : '',
+                              link: probationMeetingDetails.link || '',
+                              reason: ''
+                            });
+                            setShowRescheduleProbationModal(true);
+                          }}
+                          className="btn-glass"
+                          style={{ padding: '4px 12px', fontSize: '12px' }}
+                        >
+                          🔄 Reschedule
+                        </button>
+                      </div>
                       <p style={{ margin: '0 0 4px 0', fontSize: '13px', color: 'var(--text-muted)' }}>Date: <span style={{color: '#fff'}}>{getFormattedDateIST(probationMeetingDetails.date)}</span></p>
                       <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: 'var(--text-muted)' }}>Time: <span style={{color: '#fff'}}>{extractTimeFromISO(probationMeetingDetails.date)} - {extractTimeFromISO(probationMeetingDetails.end)}</span></p>
-                      <a href={probationMeetingDetails.link} target="_blank" rel="noreferrer" className="btn-glass" style={{ textDecoration: 'none', padding: '6px 16px', fontSize: '12px' }}>🔗 Access Link</a>
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <a href={probationMeetingDetails.link} target="_blank" rel="noreferrer" className="btn-glass" style={{ textDecoration: 'none', padding: '6px 16px', fontSize: '12px' }}>🔗 Access Link</a>
+                      </div>
                     </div>
                   )}
 
@@ -1298,7 +2275,20 @@ function CandidateDetailsPage() {
                       else if (newStatus === 'Pending') { obStatus = 'Pending'; stage = 'Selected'; action = 'probation_pending'; }
                       await supabase.from('onboarding').update({ probation_status: newStatus, onboarding_status: obStatus }).eq('candidate_id', id);
                       await supabase.from('candidates').update({ current_stage: stage }).eq('id', id);
-                      if (action) await logTeamActivity(action, 'onboarding', id, { candidate_id: id, candidate_name: candidate.name || candidate.full_name, new_status: newStatus, new_stage: stage });
+                      
+                      await logTeamActivity(
+                        action || 'probation_updated',
+                        'onboarding',
+                        id,
+                        {
+                          candidate_id: id,
+                          candidate_name: candidate.name || candidate.full_name,
+                          new_status: newStatus,
+                          new_stage: stage,
+                          updated_by: localStorage.getItem('userName') || 'HR'
+                        }
+                      );
+                      
                       alert(`Lifecycle updated to: ${newStatus}`); fetchCompleteProfile();
                     }} style={{ ...inputStyle, cursor: 'pointer' }}>
                       <option value="Pending" style={{color:'#000'}}>Pending (Awaiting Activation)</option>
@@ -1494,6 +2484,123 @@ function CandidateDetailsPage() {
                 <button onClick={handleHRRescheduleInterview} className="btn-premium" style={{ flex: 1, background: '#f59e0b', color: '#000' }}>Confirm Update</button>
                 <button onClick={() => { setShowHRRescheduleModal(false); setHrRescheduleData({ interviewId: null, panel: '', link: '', date: '', startTime: '', endTime: '', reason: '' }); }} className="btn-glass" style={{ flex: 1 }}>Cancel</button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ===== RESCHEDULE PROBATION MEETING MODAL ===== */}
+        {showRescheduleProbationModal && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.8)',
+            backdropFilter: 'blur(10px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1001,
+            padding: '20px'
+          }}>
+            <div className="glass-panel" style={{
+              padding: '32px',
+              borderRadius: '16px',
+              maxWidth: '500px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              position: 'relative'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+  <h3 style={{ margin: 0, color: '#fbbf24', fontSize: '20px', fontWeight: '700' }}>
+    📅 Reschedule Probation Meeting
+  </h3>
+  <button
+    onClick={() => setShowRescheduleProbationModal(false)}
+    className="btn-glass"
+    style={{ padding: '4px 12px', fontSize: '18px' }}
+  >
+    ✕
+  </button>
+</div>
+
+<p style={{ color: '#eff3f8', fontSize: '14px', marginBottom: '24px', lineHeight: '1.6' }}>
+  Candidate will be notified of the new meeting details.
+</p>
+
+<div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+  <div>
+    <label style={labelStyle}>Meeting Link *</label>
+    <input
+      type="text"
+      placeholder="https://meet.google.com/..."
+      value={rescheduleProbationData.link}
+      onChange={(e) => setRescheduleProbationData({...rescheduleProbationData, link: e.target.value})}
+      style={inputStyle}
+    />
+  </div>
+  
+  <div>
+    <label style={labelStyle}>Date *</label>
+    <input
+      type="date"
+      value={rescheduleProbationData.date}
+      onChange={(e) => setRescheduleProbationData({...rescheduleProbationData, date: e.target.value})}
+      style={{...inputStyle, color: '#eff3f8', colorScheme: 'dark'}}
+    />
+  </div>
+  
+  <div style={{ display: 'flex', gap: '12px' }}>
+    <div style={{ flex: 1 }}>
+      <label style={labelStyle}>Start Time *</label>
+      <input
+        type="time"
+        value={rescheduleProbationData.startTime}
+        onChange={(e) => setRescheduleProbationData({...rescheduleProbationData, startTime: e.target.value})}
+        style={{...inputStyle, color: '#eff3f8', colorScheme: 'dark'}}
+      />
+    </div>
+    <div style={{ flex: 1 }}>
+      <label style={labelStyle}>End Time *</label>
+      <input
+        type="time"
+        value={rescheduleProbationData.endTime}
+        onChange={(e) => setRescheduleProbationData({...rescheduleProbationData, endTime: e.target.value})}
+        style={{...inputStyle, color: '#eff3f8', colorScheme: 'dark'}}
+      />
+    </div>
+  </div>
+
+  <div>
+    <label style={labelStyle}>Reason for Reschedule</label>
+    <textarea
+      value={rescheduleProbationData.reason}
+      onChange={(e) => setRescheduleProbationData({...rescheduleProbationData, reason: e.target.value})}
+      placeholder="Optional reason for rescheduling..."
+      rows="2"
+      style={{...inputStyle, resize: 'vertical'}}
+    />
+  </div>
+</div>
+
+<div style={{ display: 'flex', gap: '12px' }}>
+  <button
+    onClick={handleRescheduleProbationMeeting}
+    className="btn-premium"
+    style={{ flex: 1, background: '#f59e0b', color: '#000' }}
+  >
+    Confirm Reschedule
+  </button>
+  <button
+    onClick={() => setShowRescheduleProbationModal(false)}
+    className="btn-glass"
+    style={{ flex: 1 }}
+  >
+    Cancel
+  </button>
+</div>
             </div>
           </div>
         )}

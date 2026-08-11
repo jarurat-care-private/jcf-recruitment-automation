@@ -1,4 +1,4 @@
-// src/components/HRAdminAnalytics.jsx
+// pages/HRAdminAnalytics.jsx - WITHOUT EXPORT CENTER
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
@@ -8,6 +8,7 @@ import TeamActivityTracker from '../components/TeamActivityTracker';
 import RegisterUser from '../components/RegisterUser';
 import ChangePasswordModal from '../components/ChangePasswordModal';
 import StageAnalytics from '../components/StageAnalytics';
+import HRRegisterCandidate from '../components/HRRegisterCandidate';
 
 function HRAdminAnalytics() {
   const navigate = useNavigate();
@@ -17,6 +18,7 @@ function HRAdminAnalytics() {
   const [timeframe, setTimeframe] = useState('week');
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showRegisterCandidateModal, setShowRegisterCandidateModal] = useState(false);
   const [registrationSuccess, setRegistrationSuccess] = useState(null);
   
   // All data states
@@ -79,7 +81,6 @@ function HRAdminAnalytics() {
     // Reviewer Analytics
     reviewerStats: {}
   });
-  const [exportLoading, setExportLoading] = useState(false);
 
   // Check session on mount
   useEffect(() => {
@@ -365,83 +366,6 @@ function HRAdminAnalytics() {
     });
   }
 
-  // Export functions
-  const exportReport = async (type) => {
-    setExportLoading(true);
-    try {
-      let data = [];
-      let filename = '';
-      let headers = [];
-
-      switch(type) {
-        case 'candidate':
-          data = candidates;
-          headers = ['ID', 'Name', 'Email', 'Phone', 'Domain', 'Source', 'Stage', 'Created At'];
-          filename = 'candidate_report.csv';
-          break;
-        case 'source':
-          data = stats.bestSources;
-          headers = ['Source', 'Leads', 'Submissions', 'Selected', 'Conversion Rate (%)'];
-          filename = 'source_report.csv';
-          break;
-        case 'interview':
-          data = Object.entries(stats.interviewerStats).map(([name, s]) => ({
-            name,
-            assigned: s.assigned,
-            evaluated: s.evaluated,
-            pending: s.pending,
-            passed: s.passed,
-            rejected: s.rejected,
-            completionRate: Math.round(s.completionRate)
-          }));
-          headers = ['Interviewer', 'Assigned', 'Evaluated', 'Pending', 'Passed', 'Rejected', 'Completion Rate (%)'];
-          filename = 'interview_report.csv';
-          break;
-        case 'probation':
-          const probationCandidates = candidates.filter(c => 
-            c.current_stage === 'Probation' || c.current_stage === 'Onboarding Done'
-          );
-          data = probationCandidates.map(c => ({
-            name: c.name,
-            email: c.email,
-            stage: c.current_stage,
-            joined: c.created_at
-          }));
-          headers = ['Name', 'Email', 'Stage', 'Joined'];
-          filename = 'probation_report.csv';
-          break;
-        default:
-          return;
-      }
-
-      // Create CSV
-      const csvRows = [];
-      csvRows.push(headers.join(','));
-      
-      data.forEach(row => {
-        const values = Object.values(row).map(val => 
-          typeof val === 'string' && val.includes(',') ? `"${val}"` : val
-        );
-        csvRows.push(values.join(','));
-      });
-
-      const csv = csvRows.join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      window.URL.revokeObjectURL(url);
-
-    } catch (error) {
-      console.error('Export error:', error);
-      alert('Failed to export report. Please try again.');
-    } finally {
-      setExportLoading(false);
-    }
-  };
-
   const handleLogout = async () => {
     await logout();
     navigate('/hr-login');
@@ -450,6 +374,12 @@ function HRAdminAnalytics() {
   const handleRegistrationSuccess = (newUser) => {
     setRegistrationSuccess(`✅ ${newUser.name} registered successfully!`);
     setTimeout(() => setRegistrationSuccess(null), 5000);
+  };
+
+  const handleCandidateRegistrationSuccess = (newCandidate) => {
+    setRegistrationSuccess(`✅ ${newCandidate.name} registered as candidate!`);
+    setTimeout(() => setRegistrationSuccess(null), 5000);
+    fetchAllData();
   };
 
   // Get user name from AuthContext
@@ -513,7 +443,7 @@ function HRAdminAnalytics() {
             </h1>
           </div>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {/* User Info */}
             <div style={{ 
               display: 'flex', 
@@ -548,10 +478,29 @@ function HRAdminAnalytics() {
               </div>
             </div>
 
-            {/* Actions */}
+            {/* Register User Button - HR Users only */}
             {canRegisterUsers() && (
               <button onClick={() => setShowRegisterModal(true)} className="btn-premium" style={{ padding: '10px 20px', fontSize: '13px' }}>
                 ➕ Register User
+              </button>
+            )}
+
+            {/* Register Candidate Button - HR Users only */}
+            {canRegisterUsers() && (
+              <button 
+                onClick={() => setShowRegisterCandidateModal(true)} 
+                className="btn-glass" 
+                style={{ 
+                  padding: '10px 20px', 
+                  fontSize: '13px', 
+                  color: '#6ee7b7', 
+                  borderColor: 'rgba(16, 185, 129, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                📝 Register Candidate
               </button>
             )}
 
@@ -628,239 +577,13 @@ function HRAdminAnalytics() {
               Live
             </span>
           </button>
-          
-          <div style={{ width: '1px', background: 'var(--glass-border)', margin: '0 8px' }}></div>
-
-          {/* Export Reports Tab */}
-          <button
-            onClick={() => setActiveTab('export')}
-            className={activeTab === 'export' ? 'btn-premium' : 'btn-glass'}
-            style={{ 
-              padding: '10px 24px', 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '8px',
-              background: activeTab === 'export' ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(255,255,255,0.05)',
-              borderColor: activeTab === 'export' ? 'transparent' : 'var(--glass-border)'
-            }}
-          >
-            📤 Export Center
-          </button>
         </div>
 
         {/* ===== TAB RENDERERS ===== */}
-        
-        {/* Child Components will render here. They might currently be light-mode, 
-            but this wrapper ensures the page structure remains premium. */}
         <div className="animate-fade-up delay-200">
           {activeTab === 'overview' && <StageAnalytics />}
-          
           {activeTab === 'performance' && <TeamPerformance />}
-          
           {activeTab === 'activity' && <TeamActivityTracker />}
-
-          {/* ===== EXPORT REPORTS TAB ===== */}
-          {activeTab === 'export' && (
-            <div className="glass-panel" style={{ 
-              padding: '40px', 
-              maxWidth: '800px',
-              margin: '0 auto',
-              textAlign: 'center'
-            }}>
-              <h2 style={{ margin: '0 0 12px 0', color: '#fff', fontSize: '24px', fontWeight: '800', letterSpacing: '-0.5px' }}>
-                Data Export Center
-              </h2>
-              <p style={{ color: 'var(--text-muted)', marginBottom: '40px', fontSize: '15px' }}>
-                Securely generate and download CSV reports for external auditing.
-              </p>
-
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', 
-                gap: '20px' 
-              }}>
-                <button
-                  onClick={() => exportReport('candidate')}
-                  disabled={exportLoading}
-                  style={{
-                    padding: '30px 20px',
-                    borderRadius: '16px',
-                    border: '1px solid var(--glass-border)',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    cursor: exportLoading ? 'not-allowed' : 'pointer',
-                    textAlign: 'center',
-                    transition: 'all 0.3s ease',
-                    opacity: exportLoading ? 0.7 : 1,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!exportLoading) {
-                      e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
-                      e.currentTarget.style.borderColor = 'var(--primary)';
-                      e.currentTarget.style.transform = 'translateY(-4px)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!exportLoading) {
-                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-                      e.currentTarget.style.borderColor = 'var(--glass-border)';
-                      e.currentTarget.style.transform = 'translateY(0)';
-                    }
-                  }}
-                >
-                  <div style={{ fontSize: '36px', marginBottom: '16px' }}>👥</div>
-                  <div style={{ fontWeight: '700', color: '#fff', fontSize: '16px', marginBottom: '8px' }}>
-                    Candidate Report
-                  </div>
-                  <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                    {candidates.length} records
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => exportReport('source')}
-                  disabled={exportLoading}
-                  style={{
-                    padding: '30px 20px',
-                    borderRadius: '16px',
-                    border: '1px solid var(--glass-border)',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    cursor: exportLoading ? 'not-allowed' : 'pointer',
-                    textAlign: 'center',
-                    transition: 'all 0.3s ease',
-                    opacity: exportLoading ? 0.7 : 1,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!exportLoading) {
-                      e.currentTarget.style.background = 'rgba(139, 92, 246, 0.1)';
-                      e.currentTarget.style.borderColor = 'var(--accent)';
-                      e.currentTarget.style.transform = 'translateY(-4px)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!exportLoading) {
-                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-                      e.currentTarget.style.borderColor = 'var(--glass-border)';
-                      e.currentTarget.style.transform = 'translateY(0)';
-                    }
-                  }}
-                >
-                  <div style={{ fontSize: '36px', marginBottom: '16px' }}>📊</div>
-                  <div style={{ fontWeight: '700', color: '#fff', fontSize: '16px', marginBottom: '8px' }}>
-                    Source Matrix
-                  </div>
-                  <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                    {stats.bestSources.length} channels
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => exportReport('interview')}
-                  disabled={exportLoading}
-                  style={{
-                    padding: '30px 20px',
-                    borderRadius: '16px',
-                    border: '1px solid var(--glass-border)',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    cursor: exportLoading ? 'not-allowed' : 'pointer',
-                    textAlign: 'center',
-                    transition: 'all 0.3s ease',
-                    opacity: exportLoading ? 0.7 : 1,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!exportLoading) {
-                      e.currentTarget.style.background = 'rgba(16, 185, 129, 0.1)';
-                      e.currentTarget.style.borderColor = '#10b981';
-                      e.currentTarget.style.transform = 'translateY(-4px)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!exportLoading) {
-                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-                      e.currentTarget.style.borderColor = 'var(--glass-border)';
-                      e.currentTarget.style.transform = 'translateY(0)';
-                    }
-                  }}
-                >
-                  <div style={{ fontSize: '36px', marginBottom: '16px' }}>🎯</div>
-                  <div style={{ fontWeight: '700', color: '#fff', fontSize: '16px', marginBottom: '8px' }}>
-                    Interview Audit
-                  </div>
-                  <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                    {Object.keys(stats.interviewerStats).length} panelists
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => exportReport('probation')}
-                  disabled={exportLoading}
-                  style={{
-                    padding: '30px 20px',
-                    borderRadius: '16px',
-                    border: '1px solid var(--glass-border)',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    cursor: exportLoading ? 'not-allowed' : 'pointer',
-                    textAlign: 'center',
-                    transition: 'all 0.3s ease',
-                    opacity: exportLoading ? 0.7 : 1,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!exportLoading) {
-                      e.currentTarget.style.background = 'rgba(245, 158, 11, 0.1)';
-                      e.currentTarget.style.borderColor = '#f59e0b';
-                      e.currentTarget.style.transform = 'translateY(-4px)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!exportLoading) {
-                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-                      e.currentTarget.style.borderColor = 'var(--glass-border)';
-                      e.currentTarget.style.transform = 'translateY(0)';
-                    }
-                  }}
-                >
-                  <div style={{ fontSize: '36px', marginBottom: '16px' }}>📋</div>
-                  <div style={{ fontWeight: '700', color: '#fff', fontSize: '16px', marginBottom: '8px' }}>
-                    Probation Cohort
-                  </div>
-                  <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                    {candidates.filter(c => c.current_stage === 'Probation' || c.current_stage === 'Onboarding Done').length} active
-                  </div>
-                </button>
-              </div>
-
-              {exportLoading && (
-                <div style={{ 
-                  marginTop: '24px', 
-                  padding: '16px', 
-                  background: 'rgba(59, 130, 246, 0.1)', 
-                  border: '1px solid var(--primary)',
-                  borderRadius: '8px', 
-                  textAlign: 'center',
-                  color: '#60a5fa',
-                  fontWeight: '600',
-                  backdropFilter: 'blur(10px)'
-                }}>
-                  ⏳ Compiling cryptographically secure payload...
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Modals */}
@@ -873,6 +596,13 @@ function HRAdminAnalytics() {
 
         {showChangePassword && (
           <ChangePasswordModal onClose={() => setShowChangePassword(false)} />
+        )}
+
+        {showRegisterCandidateModal && (
+          <HRRegisterCandidate 
+            onClose={() => setShowRegisterCandidateModal(false)}
+            onSuccess={handleCandidateRegistrationSuccess}
+          />
         )}
       </div>
     </>
