@@ -1,4 +1,4 @@
-// src/pages/CandidatePortalPage.jsx - WITH PROBATION MEETING RESCHEDULE SUPPORT
+// src/pages/CandidatePortalPage.jsx - COMPLETE WITH DOMAIN MANAGEMENT SUPPORT
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
@@ -21,6 +21,31 @@ function formatIST(dateString) {
     });
   } catch (e) {
     return dateString;
+  }
+}
+
+// ===== HELPER: Format Time Slot =====
+function formatTimeSlot(startDateTime, endDateTime) {
+  if (!startDateTime) return '';
+  try {
+    const start = new Date(startDateTime);
+    const end = endDateTime ? new Date(endDateTime) : new Date(start.getTime() + 15 * 60 * 1000);
+    
+    const startStr = start.toLocaleTimeString('en-IN', { 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      timeZone: 'Asia/Kolkata',
+      hour12: true 
+    });
+    const endStr = end.toLocaleTimeString('en-IN', { 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      timeZone: 'Asia/Kolkata',
+      hour12: true 
+    });
+    return `${startStr} - ${endStr}`;
+  } catch (e) {
+    return '';
   }
 }
 
@@ -75,11 +100,19 @@ export default function CandidatePortalPage() {
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const [assignmentLink, setAssignmentLink] = useState('');
 
+  // ===== LOAD DOMAINS FROM DATABASE =====
   useEffect(() => {
     async function loadDomains() {
       try {
-        const { data, error } = await supabase.from('assignment_templates').select('domain');
+        // Fetch domains from assignment_templates table
+        const { data, error } = await supabase
+          .from('assignment_templates')
+          .select('domain')
+          .order('domain', { ascending: true });
+        
         if (error) {
+          console.error('Error fetching domains:', error);
+          // Fallback to hardcoded list
           setDomains([
             "Automation & Operations", "Brand Management & Outreach", "Business Development",
             "Clinical Psychologist", "Content Creation", "Creative Design", "Graphic Design",
@@ -90,10 +123,23 @@ export default function CandidatePortalPage() {
           ]);
           return;
         }
+        
         if (data && data.length > 0) {
           setDomains([...new Set(data.map(d => d.domain))]);
+        } else {
+          // Fallback to hardcoded list if no data
+          setDomains([
+            "Automation & Operations", "Brand Management & Outreach", "Business Development",
+            "Clinical Psychologist", "Content Creation", "Creative Design", "Graphic Design",
+            "HR Psychologist", "Human Resources (HR)", "Lead Generation", "Marketing",
+            "Media & Public Relations (PR)", "Motion Graphics", "Operations", "Project Management",
+            "Python Automation", "Sales and Marketing", "Social Media Management", "Talent Acquisition",
+            "Video Editing/Making", "UI/UX Design", "Full stack Developer"
+          ]);
         }
-      } catch (err) { console.error("Error in loadDomains:", err); }
+      } catch (err) { 
+        console.error("Error in loadDomains:", err); 
+      }
     }
     loadDomains();
   }, []);
@@ -132,6 +178,7 @@ export default function CandidatePortalPage() {
     if (!error) setFaqs(data || []);
   }
 
+  // ===== FETCH WORKFLOW CONTEXT - Uses assignment_templates for domain links =====
   async function fetchWorkflowContext() {
     if (!candidate) return;
     const { data: updatedCand } = await supabase.from('candidates').select('*').eq('id', candidate.id).single();
@@ -142,11 +189,23 @@ export default function CandidatePortalPage() {
 
     let { data: assign, error: assignError } = await supabase.from('assignments').select('*').eq('candidate_id', candidate.id).maybeSingle();
 
+    // If candidate is in Assignment stage but no assignment exists, create one from template
     if (currentStage === 'Assignment' && !assign && !assignError) {
-      const { data: template } = await supabase.from('assignment_templates').select('*').eq('domain', currentDomain).maybeSingle();
+      const { data: template } = await supabase
+        .from('assignment_templates')
+        .select('*')
+        .eq('domain', currentDomain)
+        .maybeSingle();
+      
       if (template) {
         const { data: newAssign, error: insertError } = await supabase.from('assignments').insert({
-          candidate_id: candidate.id, assignment_template_id: template.id, assignment_title: template.assignment_name, assignment_type: 'Domain Task', assignment_status: 'Assigned', assigned_by: 'System Admin', task_link_template: template.assignment_link
+          candidate_id: candidate.id, 
+          assignment_template_id: template.id, 
+          assignment_title: template.assignment_name, 
+          assignment_type: 'Domain Task', 
+          assignment_status: 'Assigned', 
+          assigned_by: 'System Admin', 
+          task_link_template: template.assignment_link
         }).select().single();
         if (!insertError && newAssign) assign = newAssign;
       }
@@ -336,7 +395,7 @@ export default function CandidatePortalPage() {
   }
 
   // ==========================================
-  // FIX: HARD RELOAD AUTHENTICATION
+  // HARD RELOAD AUTHENTICATION
   // ==========================================
   async function handleLogin(e) {
     e.preventDefault(); setErrorMsg('');
@@ -345,7 +404,7 @@ export default function CandidatePortalPage() {
     const { data, error } = await supabase.from('candidates').select('*').eq('email', emailInput.trim().toLowerCase()).maybeSingle();
     if (error) { setErrorMsg('A database retrieval anomaly occurred.'); } 
     else if (data) {
-      // 🔥 HARD RESET: Dump browser RAM to kill Ghost State
+      // HARD RESET: Dump browser RAM to kill Ghost State
       localStorage.removeItem('candidateEmail');
       localStorage.setItem('candidateEmail', data.email);
       window.location.href = '/portal'; 
@@ -364,7 +423,6 @@ export default function CandidatePortalPage() {
     const { data: checkExist } = await supabase.from('candidates').select('*').eq('email', cleanEmail).maybeSingle();
     if (checkExist) {
       alert('This email profile matches a pre-existing profile. Logging into workspace.');
-      // 🔥 HARD RESET
       localStorage.removeItem('candidateEmail');
       localStorage.setItem('candidateEmail', checkExist.email);
       window.location.href = '/portal';
@@ -392,7 +450,6 @@ export default function CandidatePortalPage() {
       }
       
       alert('Registered successfully! Taking you to your workspace...');
-      // 🔥 HARD RESET
       localStorage.removeItem('candidateEmail');
       localStorage.setItem('candidateEmail', newCand.email);
       window.location.href = '/portal';
@@ -400,11 +457,9 @@ export default function CandidatePortalPage() {
   }
 
   const handleLogout = async () => {
-    // 🔥 HARD RESET
     localStorage.removeItem('candidateEmail'); 
     window.location.href = '/login'; 
   };
-  // ==========================================
 
   async function handleSubmitQuestion(e) {
     e.preventDefault();
@@ -466,9 +521,7 @@ export default function CandidatePortalPage() {
   const getTimeSlotDisplay = (interview) => {
     if (interview.time_slot) return interview.time_slot;
     if (interview.scheduled_date_time && interview.scheduled_end_time) {
-      const startStr = new Date(interview.scheduled_date_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata', hour12: true });
-      const endStr = new Date(interview.scheduled_end_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata', hour12: true });
-      return `${startStr} - ${endStr}`;
+      return formatTimeSlot(interview.scheduled_date_time, interview.scheduled_end_time);
     }
     return null;
   };
@@ -644,7 +697,7 @@ export default function CandidatePortalPage() {
     return false;
   };
 
-  const getLateDuration = () => {
+  const getLateDurationForAssignment = () => {
     if (!assignment || !assignment.deadline || !assignment.submitted_at) return null;
     const deadline = new Date(assignment.deadline).getTime(); const submittedAt = new Date(assignment.submitted_at).getTime();
     if (submittedAt <= deadline) return null;
@@ -739,7 +792,7 @@ export default function CandidatePortalPage() {
                   {assignment && (assignment.assignment_status === 'Submitted' || assignment.assignment_status === 'Evaluated') ? (
                     <div style={{ background: isAssignmentLate() ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)', borderLeft: isAssignmentLate() ? '4px solid #ef4444' : '4px solid #10b981', padding: '16px 20px', borderRadius: '8px', marginBottom: '25px' }}>
                       <p style={{ margin: 0, color: isAssignmentLate() ? '#fca5a5' : '#6ee7b7', fontSize: '15px', lineHeight: '1.5', fontWeight: '500' }}>
-                        {isAssignmentLate() ? `LATE SUBMISSION: Your assignment was submitted ${getLateDuration()} past the deadline.` : 'Your assignment is securely logged and under evaluation.'}
+                        {isAssignmentLate() ? `LATE SUBMISSION: Your assignment was submitted ${getLateDurationForAssignment()} past the deadline.` : 'Your assignment is securely logged and under evaluation.'}
                       </p>
                     </div>
                   ) : (
@@ -754,7 +807,9 @@ export default function CandidatePortalPage() {
                   {assignment ? (
                     <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--glass-border)', borderRadius: '12px', padding: '30px' }}>
                       <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', color: '#fff', textAlign: 'center', fontWeight: '700' }}>Task: {getAssignmentTitle()}</h3>
-                      <div style={{ textAlign: 'center', marginBottom: '30px' }}><a href={assignment.task_link_template} target="_blank" rel="noreferrer" className="btn-premium" style={{ display: 'inline-block', textDecoration: 'none' }}>Access Assignment Brief</a></div>
+                      <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+                        <a href={assignment.task_link_template} target="_blank" rel="noreferrer" className="btn-premium" style={{ display: 'inline-block', textDecoration: 'none' }}>Access Assignment Brief</a>
+                      </div>
                       <div style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '24px' }}>
                         
                         <div style={{ marginBottom: '20px' }}>
@@ -815,6 +870,9 @@ export default function CandidatePortalPage() {
                         const isRescheduleRequested = iv.status === 'Reschedule_Requested';
                         const isRescheduleFormOpen = selectedInterviewId === iv.id;
                         
+                        // Get the correct time display
+                        const timeSlotDisplay = getTimeSlotDisplay(iv);
+                        
                         return (
                           <div key={iv.id} style={{ border: '1px solid var(--glass-border)', padding: '24px', borderRadius: '12px', background: 'rgba(255,255,255,0.02)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
@@ -822,7 +880,9 @@ export default function CandidatePortalPage() {
                               <span style={{ padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', backgroundColor: 'rgba(255,255,255,0.1)', color: '#e2e8f0' }}>{iv.status || 'Pending'}</span>
                             </div>
                             <p style={{ margin: '6px 0', fontSize: '15px', color: '#cbd5e1' }}><strong>Date:</strong> {getFormattedDateIST(iv.scheduled_date_time)}</p>
-                            <p style={{ margin: '6px 0', fontSize: '15px', color: '#cbd5e1' }}><strong>Time Slot:</strong> {getTimeSlotDisplay(iv) || formatTimeIST(iv.scheduled_date_time)}</p>
+                            <p style={{ margin: '6px 0', fontSize: '15px', color: '#cbd5e1' }}>
+                              <strong>Time Slot:</strong> {timeSlotDisplay || formatTimeIST(iv.scheduled_date_time)}
+                            </p>
                             
                             <div style={{ marginTop: '24px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                               <a href={iv.meeting_link} target="_blank" rel="noreferrer" className="btn-premium" style={{ textDecoration: 'none' }}>Join Secure Room</a>
@@ -854,7 +914,7 @@ export default function CandidatePortalPage() {
                 </div>
               )}
 
-              {/* END STATES: RESTORED BLOCKS */}
+              {/* END STATES */}
               
               {candidate.current_stage === 'Selected' && (
                 <div style={{ textAlign: 'center', padding: '20px 0' }}>
@@ -983,7 +1043,7 @@ export default function CandidatePortalPage() {
                   </button>
                 </form>
 
-                {/* RESTORED: Questions Map Logic */}
+                {/* Questions Map Logic */}
                 {questions.length > 0 && (
                   <div style={{ marginTop: '32px' }}>
                     <h4 style={{ margin: '0 0 16px 0', fontSize: '13px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>

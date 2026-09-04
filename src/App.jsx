@@ -8,6 +8,7 @@ import CandidatePortalPage from './pages/CandidatePortalPage';
 import QuestionsPage from './pages/QuestionsPage';
 import HRLogin from './components/HRLogin';
 import HRAdminAnalytics from './components/HRAdminAnalytics';
+import GoogleCalendar from './components/GoogleCalendar';
 
 function App() {
   return (
@@ -17,20 +18,24 @@ function App() {
           {/* NEW LANDING PAGE AT ROOT */}
           <Route path="/" element={<LandingPage />} />
           
-          {/* MOVED HR DASHBOARD HERE */}
+          {/* ALL DASHBOARD ROUTES - RENDER SIDEBAR WITH CONTENT */}
           <Route path="/hr-dashboard" element={<HRAdminDashboard />} />
+          <Route path="/analytics" element={<HRAdminDashboard />} />
+          <Route path="/calendar" element={<HRAdminDashboard />} />
+          <Route path="/questions" element={<HRAdminDashboard />} />  {/* ✅ ADDED: Support Hub with sidebar */}
           
           {/* EXISTING ROUTES - UNCHANGED */}
           <Route path="/candidate/:id" element={<CandidateDetailsPage />} />
-          <Route path="/questions" element={<QuestionsPage />} />
           <Route path="/login" element={<CandidatePortalPage />} />
           <Route path="/portal" element={<CandidatePortalPage />} />
                      
           {/* NEW ROUTES */}
           <Route path="/hr-login" element={<HRLogin />} />
-          <Route path="/analytics" element={<HRAdminAnalytics />} />
+          
+          {/* OAUTH CALLBACK ROUTE */}
+          <Route path="/auth/callback" element={<GoogleCalendar />} />
                      
-          {/* 404 Fallback - UNCHANGED */}
+          {/* 404 Fallback */}
           <Route path="*" element={
             <div style={{ 
                padding: '50px', 

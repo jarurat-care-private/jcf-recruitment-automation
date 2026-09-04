@@ -13,6 +13,16 @@ function TeamActivityTracker() {
     fetchActivities();
   }, [filter]);
 
+  // ===== FIXED: Team filter mapping =====
+  const teamMapping = {
+    'all': null,
+    'assignment': 'assignment',
+    'scheduling': 'scheduling',
+    'panel_r1': 'panel_r1',
+    'panel_r2': 'panel_r2',
+    'leadership': 'leadership'
+  };
+
   async function fetchActivities() {
     setLoading(true);
     try {
@@ -22,19 +32,22 @@ function TeamActivityTracker() {
         .order('created_at', { ascending: false })
         .limit(50);
 
-      if (filter !== 'all') {
-        query = query.eq('team', filter);
+      const dbTeam = teamMapping[filter];
+      if (dbTeam && filter !== 'all') {
+        query = query.eq('team', dbTeam);
       }
 
       const { data, error } = await query;
 
       if (error) {
-        console.error(' Error fetching activities:', error);
+        console.error('Error fetching activities:', error);
+        setActivities([]);
       } else {
         setActivities(data || []);
       }
     } catch (error) {
-      console.error(' Error:', error);
+      console.error('Error:', error);
+      setActivities([]);
     } finally {
       setLoading(false);
     }
@@ -42,6 +55,7 @@ function TeamActivityTracker() {
 
   const getActionIcon = (action) => {
     const icons = {
+      'assignment_dispatched': '📝',
       'assignment_sent': '📝',
       'assignment_evaluated': '✅',
       'interview_scheduled': '📅',
@@ -52,6 +66,7 @@ function TeamActivityTracker() {
       'candidate_hold': '⏸️',
       'probation_started': '🚀',
       'probation_meeting_scheduled': '📆',
+      'probation_meeting_rescheduled': '🔄',
       'onboarding_completed': '🎉',
       'internship_discontinued': '⏹️',
       'candidate_terminated': '⛔',
@@ -66,6 +81,9 @@ function TeamActivityTracker() {
       'hr_replied_to_question': '💬',
       'faq_added': '📚',
       'faq_marked_from_question': '📌',
+      'profile_updated': '✏️',
+      'candidate_note_added': '📝',
+      'resume_uploaded': '📄',
       'test_activity': '🧪'
     };
     return icons[action] || '📌';
@@ -73,6 +91,7 @@ function TeamActivityTracker() {
 
   const getActionColor = (action) => {
     const colors = {
+      'assignment_dispatched': '#60a5fa',
       'assignment_sent': '#60a5fa',
       'assignment_evaluated': '#a78bfa',
       'interview_scheduled': '#fbbf24',
@@ -83,14 +102,24 @@ function TeamActivityTracker() {
       'candidate_hold': '#fbbf24',
       'probation_started': '#60a5fa',
       'probation_meeting_scheduled': '#a78bfa',
+      'probation_meeting_rescheduled': '#fbbf24',
       'onboarding_completed': '#34d399',
       'internship_discontinued': '#fb923c',
       'candidate_terminated': '#f87171',
       'candidate_withdrawn': '#a78bfa',
       'candidate_waitlisted': '#a78bfa',
       'candidate_restored_from_waitlist': '#34d399',
+      'candidate_restored_from_on_hold': '#34d399',
       'interview_rescheduled_by_hr': '#fbbf24',
       'probation_pending': '#fbbf24',
+      'candidate_force_scheduled': '#fbbf24',
+      'candidate_rejected_low_score': '#f87171',
+      'hr_replied_to_question': '#34d399',
+      'faq_added': '#34d399',
+      'faq_marked_from_question': '#34d399',
+      'profile_updated': '#60a5fa',
+      'candidate_note_added': '#a78bfa',
+      'resume_uploaded': '#34d399',
       'test_activity': '#94a3b8'
     };
     return colors[action] || '#94a3b8';
@@ -107,9 +136,37 @@ function TeamActivityTracker() {
     return labels[team] || team || 'Unknown';
   };
 
+  // Format IST time
+  const formatISTTime = (dateString) => {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '';
+      return date.toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+    } catch (e) {
+      return dateString;
+    }
+  };
+
   return (
     <div className="glass-panel animate-fade-up" style={{ padding: '30px', marginTop: '20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        marginBottom: '24px', 
+        flexWrap: 'wrap', 
+        gap: '16px' 
+      }}>
         <h3 style={{ margin: 0, fontSize: '20px', color: '#fff', fontWeight: '700' }}>
           📋 Global Activity Ledger
         </h3>
@@ -147,11 +204,25 @@ function TeamActivityTracker() {
 
       {loading ? (
         <div style={{ padding: '40px', textAlign: 'center' }}>
-          <div style={{ width: '40px', height: '40px', border: '4px solid rgba(255,255,255,0.1)', borderTop: '4px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
+          <div style={{ 
+            width: '40px', 
+            height: '40px', 
+            border: '4px solid rgba(255,255,255,0.1)', 
+            borderTop: '4px solid var(--primary)', 
+            borderRadius: '50%', 
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 16px' 
+          }} />
           <p style={{ color: 'var(--text-muted)' }}>Decrypting logs...</p>
         </div>
       ) : activities.length === 0 ? (
-        <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '40px 0', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '12px' }}>
+        <p style={{ 
+          textAlign: 'center', 
+          color: 'var(--text-muted)', 
+          padding: '40px 0', 
+          border: '1px dashed rgba(255,255,255,0.1)', 
+          borderRadius: '12px' 
+        }}>
           📭 Ledger is empty. Activities will stream here in real-time.
         </p>
       ) : (
@@ -194,7 +265,13 @@ function TeamActivityTracker() {
                 </div>
                 
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '12px', 
+                    flexWrap: 'wrap', 
+                    marginBottom: '8px' 
+                  }}>
                     <span style={{ fontWeight: '700', fontSize: '15px', color: '#fff' }}>
                       {activity.user_name || 'System'}
                     </span>
@@ -222,7 +299,9 @@ function TeamActivityTracker() {
                   
                   <div style={{ fontSize: '14px', color: 'var(--text-muted)', lineHeight: '1.6' }}>
                     {activity.details?.candidate_name && (
-                      <span style={{ color: '#fff', fontWeight: '500' }}>{activity.details.candidate_name}</span>
+                      <span style={{ color: '#fff', fontWeight: '500' }}>
+                        {activity.details.candidate_name}
+                      </span>
                     )}
                     {activity.action === 'interview_scheduled' && panelName && !isPanelistUnknown && (
                       <span> • Panel: <span style={{color: '#fff'}}>{panelName}</span></span>
@@ -248,13 +327,13 @@ function TeamActivityTracker() {
                     {activity.details?.new_status && (
                       <span> • Status: <span style={{color: '#fff'}}>{activity.details.new_status}</span></span>
                     )}
+                    {activity.details?.change_summary && (
+                      <span> • Changes: <span style={{color: '#fff'}}>{activity.details.change_summary}</span></span>
+                    )}
                   </div>
                   
                   <div style={{ fontSize: '12px', color: '#64748b', marginTop: '10px', fontWeight: '500' }}>
-                     {new Date(activity.created_at).toLocaleString('en-IN', {
-                      day: '2-digit', month: 'short', year: 'numeric',
-                      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
-                    })}
+                    {formatISTTime(activity.created_at)}
                   </div>
                 </div>
               </div>
@@ -275,6 +354,13 @@ function TeamActivityTracker() {
           Displaying top {activities.length} ledger entries in real-time
         </div>
       )}
+      
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

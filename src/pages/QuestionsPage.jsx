@@ -46,29 +46,65 @@ function QuestionsPage() {
   };
 
   // Reusable styles
-  const inputStyle = { width: '100%', padding: '12px 16px', boxSizing: 'border-box', border: '1px solid var(--glass-border)', borderRadius: '8px', outline: 'none', fontSize: '14px', backgroundColor: 'rgba(255, 255, 255, 0.05)', color: '#fff', transition: 'all 0.2s', fontFamily: 'inherit' };
+  const inputStyle = { 
+    width: '100%', 
+    padding: '12px 16px', 
+    boxSizing: 'border-box', 
+    border: '1px solid var(--glass-border)', 
+    borderRadius: '8px', 
+    outline: 'none', 
+    fontSize: '14px', 
+    backgroundColor: 'rgba(255, 255, 255, 0.05)', 
+    color: '#fff', 
+    transition: 'all 0.2s', 
+    fontFamily: 'inherit' 
+  };
 
   return (
     <>
       <div className="aurora-bg" style={{ opacity: 0.4 }}></div>
-      <div style={{ padding: '40px 60px', fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif", minHeight: '100vh', position: 'relative', zIndex: 1 }}>
+      <div style={{ 
+        padding: '40px 60px', 
+        fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif", 
+        minHeight: '100vh', 
+        position: 'relative', 
+        zIndex: 1 
+      }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           
-          {/* Header */}
-          <div className="animate-fade-up" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+          {/* ✅ FIXED: Header with correct navigation */}
+          <div className="animate-fade-up" style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            marginBottom: '32px' 
+          }}>
             <button 
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/hr-dashboard')}  // ✅ CHANGED: navigate to HR dashboard
               className="btn-glass"
               style={{ padding: '8px 16px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}
             >
               ← Back to Dashboard
             </button>
-            <h1 style={{ margin: 0, color: '#fff', fontSize: '32px', fontWeight: '800', letterSpacing: '-0.5px' }}>💬 Support Hub</h1>
+            <h1 style={{ 
+              margin: 0, 
+              color: '#fff', 
+              fontSize: '32px', 
+              fontWeight: '800', 
+              letterSpacing: '-0.5px' 
+            }}>
+               Support Hub
+            </h1>
             <div style={{ width: '150px' }}></div>
           </div>
 
           {/* Clickable KPI Cards */}
-          <div className="animate-fade-up delay-100" style={{ display: 'flex', gap: '20px', marginBottom: '32px', flexWrap: 'wrap' }}>
+          <div className="animate-fade-up delay-100" style={{ 
+            display: 'flex', 
+            gap: '20px', 
+            marginBottom: '32px', 
+            flexWrap: 'wrap' 
+          }}>
             <div 
               onClick={() => handleFilterClick('all')}
               className="glass-panel"
@@ -85,8 +121,23 @@ function QuestionsPage() {
                 transform: filter === 'all' ? 'translateY(-4px)' : 'translateY(0)'
               }}
             >
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Total Queries</div>
-              <div style={{ fontSize: '36px', fontWeight: '800', color: filter === 'all' ? '#60a5fa' : '#fff' }}>{questions.length}</div>
+              <div style={{ 
+                fontSize: '12px', 
+                color: 'var(--text-muted)', 
+                fontWeight: '700', 
+                textTransform: 'uppercase', 
+                letterSpacing: '1px', 
+                marginBottom: '8px' 
+              }}>
+                Total Queries
+              </div>
+              <div style={{ 
+                fontSize: '36px', 
+                fontWeight: '800', 
+                color: filter === 'all' ? '#60a5fa' : '#fff' 
+              }}>
+                {questions.length}
+              </div>
             </div>
 
             <div 
@@ -105,8 +156,23 @@ function QuestionsPage() {
                 transform: filter === 'Pending' ? 'translateY(-4px)' : 'translateY(0)'
               }}
             >
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>⏳ Actionable</div>
-              <div style={{ fontSize: '36px', fontWeight: '800', color: filter === 'Pending' ? '#fbbf24' : '#fff' }}>{pendingCount}</div>
+              <div style={{ 
+                fontSize: '12px', 
+                color: 'var(--text-muted)', 
+                fontWeight: '700', 
+                textTransform: 'uppercase', 
+                letterSpacing: '1px', 
+                marginBottom: '8px' 
+              }}>
+                 Actionable
+              </div>
+              <div style={{ 
+                fontSize: '36px', 
+                fontWeight: '800', 
+                color: filter === 'Pending' ? '#fbbf24' : '#fff' 
+              }}>
+                {pendingCount}
+              </div>
             </div>
 
             <div 
@@ -125,8 +191,23 @@ function QuestionsPage() {
                 transform: filter === 'Replied' ? 'translateY(-4px)' : 'translateY(0)'
               }}
             >
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>✅ Resolved</div>
-              <div style={{ fontSize: '36px', fontWeight: '800', color: filter === 'Replied' ? '#34d399' : '#fff' }}>{repliedCount}</div>
+              <div style={{ 
+                fontSize: '12px', 
+                color: 'var(--text-muted)', 
+                fontWeight: '700', 
+                textTransform: 'uppercase', 
+                letterSpacing: '1px', 
+                marginBottom: '8px' 
+              }}>
+                 Resolved
+              </div>
+              <div style={{ 
+                fontSize: '36px', 
+                fontWeight: '800', 
+                color: filter === 'Replied' ? '#34d399' : '#fff' 
+              }}>
+                {repliedCount}
+              </div>
             </div>
 
             <button
@@ -139,7 +220,13 @@ function QuestionsPage() {
           </div>
 
           {/* Search and Filter */}
-          <div className="glass-panel animate-fade-up delay-200" style={{ display: 'flex', gap: '16px', marginBottom: '32px', padding: '16px 24px', flexWrap: 'wrap' }}>
+          <div className="glass-panel animate-fade-up delay-200" style={{ 
+            display: 'flex', 
+            gap: '16px', 
+            marginBottom: '32px', 
+            padding: '16px 24px', 
+            flexWrap: 'wrap' 
+          }}>
             <div style={{ flex: 1, minWidth: '200px' }}>
               <input
                 type="text"
@@ -152,41 +239,119 @@ function QuestionsPage() {
             <select 
               value={filter} 
               onChange={(e) => setFilter(e.target.value)}
-              style={{ ...inputStyle, width: '200px', cursor: 'pointer', color: '#000' }}
+              style={{ ...inputStyle, width: '200px', cursor: 'pointer', color: '#f0ecec' }}
             >
               <option value="all">All Queries</option>
-              <option value="Pending">⏳ Actionable</option>
-              <option value="Replied">✅ Resolved</option>
+              <option value="Pending"> Actionable</option>
+              <option value="Replied"> Resolved</option>
             </select>
           </div>
 
           {/* Questions Table */}
           {loading ? (
             <div style={{ padding: '60px', textAlign: 'center' }}>
-              <div style={{ width: '40px', height: '40px', border: '4px solid rgba(255,255,255,0.1)', borderTop: '4px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
+              <div style={{ 
+                width: '40px', 
+                height: '40px', 
+                border: '4px solid rgba(255,255,255,0.1)', 
+                borderTop: '4px solid var(--primary)', 
+                borderRadius: '50%', 
+                animation: 'spin 1s linear infinite', 
+                margin: '0 auto 16px' 
+              }} />
               <p style={{ color: 'var(--text-muted)' }}>Decrypting inbox payload...</p>
             </div>
           ) : filteredQuestions.length === 0 ? (
-            <div className="glass-panel animate-fade-up delay-300" style={{ textAlign: 'center', padding: '60px' }}>
-              <p style={{ color: 'var(--text-muted)', fontSize: '16px' }}>📭 Inbox zero. No queries match current parameters.</p>
+            <div className="glass-panel animate-fade-up delay-300" style={{ 
+              textAlign: 'center', 
+              padding: '60px' 
+            }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: '16px' }}>
+                📭 Inbox zero. No queries match current parameters.
+              </p>
             </div>
           ) : (
-            <div className="glass-panel animate-fade-up delay-300" style={{ overflow: 'hidden', padding: 0 }}>
+            <div className="glass-panel animate-fade-up delay-300" style={{ 
+              overflow: 'hidden', 
+              padding: 0 
+            }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
-                  <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--glass-border)' }}>
-                    <th style={{ padding: '20px 24px', fontSize: '13px', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px' }}>Candidate</th>
-                    <th style={{ padding: '20px 24px', fontSize: '13px', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px' }}>Query Payload</th>
-                    <th style={{ padding: '20px 24px', fontSize: '13px', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px' }}>Status</th>
-                    <th style={{ padding: '20px 24px', fontSize: '13px', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px' }}>Timestamp</th>
-                    <th style={{ padding: '20px 24px', fontSize: '13px', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px' }}>Action</th>
+                  <tr style={{ 
+                    background: 'rgba(255,255,255,0.02)', 
+                    borderBottom: '1px solid var(--glass-border)' 
+                  }}>
+                    <th style={{ 
+                      padding: '20px 24px', 
+                      fontSize: '13px', 
+                      color: 'var(--text-muted)', 
+                      fontWeight: '700', 
+                      textTransform: 'uppercase', 
+                      letterSpacing: '1px' 
+                    }}>
+                      Candidate
+                    </th>
+                    <th style={{ 
+                      padding: '20px 24px', 
+                      fontSize: '13px', 
+                      color: 'var(--text-muted)', 
+                      fontWeight: '700', 
+                      textTransform: 'uppercase', 
+                      letterSpacing: '1px' 
+                    }}>
+                      Query Payload
+                    </th>
+                    <th style={{ 
+                      padding: '20px 24px', 
+                      fontSize: '13px', 
+                      color: 'var(--text-muted)', 
+                      fontWeight: '700', 
+                      textTransform: 'uppercase', 
+                      letterSpacing: '1px' 
+                    }}>
+                      Status
+                    </th>
+                    <th style={{ 
+                      padding: '20px 24px', 
+                      fontSize: '13px', 
+                      color: 'var(--text-muted)', 
+                      fontWeight: '700', 
+                      textTransform: 'uppercase', 
+                      letterSpacing: '1px' 
+                    }}>
+                      Timestamp
+                    </th>
+                    <th style={{ 
+                      padding: '20px 24px', 
+                      fontSize: '13px', 
+                      color: 'var(--text-muted)', 
+                      fontWeight: '700', 
+                      textTransform: 'uppercase', 
+                      letterSpacing: '1px' 
+                    }}>
+                      Action
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredQuestions.map((q, index) => (
-                    <tr key={q.id} style={{ borderBottom: '1px solid var(--glass-border)', background: index % 2 === 0 ? 'rgba(255,255,255,0.01)' : 'transparent', transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'} onMouseLeave={(e) => e.currentTarget.style.background = index % 2 === 0 ? 'rgba(255,255,255,0.01)' : 'transparent'}>
+                    <tr 
+                      key={q.id} 
+                      style={{ 
+                        borderBottom: '1px solid var(--glass-border)', 
+                        background: index % 2 === 0 ? 'rgba(255,255,255,0.01)' : 'transparent', 
+                        transition: 'background 0.2s' 
+                      }} 
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'} 
+                      onMouseLeave={(e) => e.currentTarget.style.background = index % 2 === 0 ? 'rgba(255,255,255,0.01)' : 'transparent'}
+                    >
                       <td style={{ padding: '20px 24px' }}>
-                        <div style={{ fontWeight: '600', color: '#fff', fontSize: '15px', marginBottom: '4px' }}>
+                        <div style={{ 
+                          fontWeight: '600', 
+                          color: '#fff', 
+                          fontSize: '15px', 
+                          marginBottom: '4px' 
+                        }}>
                           {q.candidate_name || q.candidates?.name || 'Unknown'}
                         </div>
                         <div style={{ fontSize: '13px', color: 'var(--primary)' }}>

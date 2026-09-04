@@ -1,25 +1,9 @@
 // src/components/RegisterUser.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../services/supabase';
-
-// ✅ FIX: Moved ModalWrapper OUTSIDE the main component to prevent input focus loss
-const ModalWrapper = ({ children, onClose, showToast, toastMessage }) => (
-  <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-    {showToast && (
-      <div style={{ position: 'fixed', top: '30px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10b981', color: '#6ee7b7', padding: '14px 28px', borderRadius: '12px', fontSize: '14px', fontWeight: '600', backdropFilter: 'blur(10px)', zIndex: 9999, display: 'flex', alignItems: 'center', gap: '10px' }}>
-        {toastMessage}
-      </div>
-    )}
-    <div className="glass-panel animate-fade-up" style={{ padding: '40px', maxWidth: '480px', width: '100%', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
-      <button onClick={onClose} className="btn-glass" style={{ position: 'absolute', top: '20px', right: '20px', padding: '6px 12px' }}>✕</button>
-      {children}
-    </div>
-  </div>
-);
 
 const RegisterUser = ({ onClose, onSuccess }) => {
-  const { canRegisterUsers, registerUser, user } = useAuth();
+  const { canRegisterUsers, registerUser } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     name: '',
@@ -28,60 +12,70 @@ const RegisterUser = ({ onClose, onSuccess }) => {
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState('info');
-  const [tempPassword, setTempPassword] = useState('');
-  const [mode, setMode] = useState('register');
-  const [usersWithoutAuth, setUsersWithoutAuth] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [registeredUser, setRegisteredUser] = useState(null);
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
 
-  useEffect(() => {
-    checkUsersWithoutAuth();
-  }, []);
+  const inputStyle = {
+    width: '100%',
+    padding: '12px 16px',
+    boxSizing: 'border-box',
+    border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: '10px',
+    outline: 'none',
+    fontSize: '14px',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    color: '#fff',
+    transition: 'all 0.2s',
+    fontFamily: 'inherit'
+  };
 
-  async function checkUsersWithoutAuth() {
-    try {
-      const { data: hrUsers, error: hrError } = await supabase.from('hr_users').select('*').eq('is_active', true);
-      if (hrError) throw hrError;
-      const authEmails = [];
-      try {
-        const { data: authData, error: authError } = await supabase.from('users').select('email');
-        if (!authError && authData) { authData.forEach(u => { if (u.email) authEmails.push(u.email); }); }
-      } catch (e) { console.log('⚠️ Cannot fetch auth users directly.'); }
-
-      if (authEmails.length === 0) return;
-
-      const missing = hrUsers.filter(u => !authEmails.includes(u.email));
-      setUsersWithoutAuth(missing);
-      
-      if (missing.length > 0) {
-        setMode('set_password');
-        setSelectedUser(missing[0]);
-      }
-    } catch (error) { console.error('Error checking users:', error); }
-  }
-
-  useEffect(() => {
-    if (showToast) {
-      const timer = setTimeout(() => setShowToast(false), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [showToast]);
-
-  const inputStyle = { width: '100%', padding: '12px 16px', boxSizing: 'border-box', border: '1px solid var(--glass-border)', borderRadius: '8px', outline: 'none', fontSize: '14px', backgroundColor: 'rgba(255, 255, 255, 0.05)', color: '#fff', transition: 'all 0.2s', fontFamily: 'inherit' };
-  const labelStyle = { display: 'block', textAlign: 'left', fontSize: '13px', fontWeight: '500', color: 'var(--text-muted)', marginBottom: '8px' };
+  const labelStyle = {
+    display: 'block',
+    textAlign: 'left',
+    fontSize: '13px',
+    fontWeight: '500',
+    color: '#94a3b8',
+    marginBottom: '8px'
+  };
 
   if (!canRegisterUsers()) {
     return (
-      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-        <div className="glass-panel animate-fade-up" style={{ padding: '40px', maxWidth: '400px', width: '100%', textAlign: 'center' }}>
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0,0,0,0.85)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 999999,
+        padding: '20px'
+      }}>
+        <div style={{
+          padding: '40px',
+          maxWidth: '400px',
+          width: '100%',
+          textAlign: 'center',
+          background: 'rgba(20, 20, 40, 0.95)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: '16px'
+        }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚫</div>
-          <h3 style={{ color: '#fca5a5', margin: '0 0 12px 0', fontSize: '22px', fontWeight: '800' }}>Clearance Denied</h3>
-          <p style={{ color: 'var(--text-muted)', margin: '0 0 30px 0', fontSize: '15px', lineHeight: '1.6' }}>You lack administrative privileges to provision new HR nodes. Ensure you have Lead or Project Manager clearance.</p>
-          <button onClick={onClose} className="btn-glass" style={{ width: '100%' }}>Close Override</button>
+          <h3 style={{ color: '#fca5a5', margin: '0 0 12px 0', fontSize: '22px' }}>Access Denied</h3>
+          <p style={{ color: '#94a3b8', margin: '0 0 30px 0', fontSize: '15px' }}>
+            You need HR Lead or Project Manager permissions.
+          </p>
+          <button onClick={onClose} style={{
+            width: '100%',
+            padding: '12px',
+            background: 'rgba(255,255,255,0.1)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            borderRadius: '10px',
+            color: '#fff',
+            cursor: 'pointer'
+          }}>
+            Close
+          </button>
         </div>
       </div>
     );
@@ -89,135 +83,208 @@ const RegisterUser = ({ onClose, onSuccess }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true); setMessage(''); setTempPassword(''); setMessageType('info'); setShowSuccess(false);
+    setLoading(true);
+    setMessage('');
 
     if (!formData.role || !formData.team) {
-      setMessage('Please select both Role and Team clearance'); setMessageType('error'); setLoading(false); return;
+      setMessage('Please select both Role and Team');
+      setLoading(false);
+      return;
     }
 
     try {
       const result = await registerUser(formData);
+      console.log('📝 Registration result:', result);
+
       if (result.success) {
-        setTempPassword(result.tempPassword); setMessageType('success'); setShowSuccess(true); setRegisteredUser(result.user);
+        const password = result.tempPassword || 'NO-PASSWORD';
+        const userName = formData.name || 'User';
+        const userEmail = formData.email || 'No Email';
+        
+        // ===== METHOD 1: SHOW IN CONSOLE WITH COPY INSTRUCTION =====
+        console.log('%c🔑 TEMPORARY PASSWORD', 'font-size: 20px; font-weight: bold; color: #fbbf24;');
+        console.log('%c' + password, 'font-size: 32px; font-weight: bold; color: #fbbf24; background: #1a1a2e; padding: 10px; border: 2px solid #f59e0b;');
+        console.log('📋 Copy this password from the line above 👆');
+        
+        // ===== METHOD 2: SHOW IN ALERT WITH CLEAR INSTRUCTION =====
+        const alertMessage = 
+          '🔑 TEMPORARY PASSWORD\n' +
+          '═══════════════════════════\n' +
+          '  ' + password + '\n' +
+          '═══════════════════════════\n\n' +
+          '👤 User: ' + userName + '\n' +
+          '📧 Email: ' + userEmail + '\n\n' +
+          '📋 To copy:\n' +
+          '1. Press Ctrl+C (or Cmd+C on Mac)\n' +
+          '2. The password is selected above\n\n' +
+          '⚠️ Share this password securely.';
+        
+        // Create a textarea with the password for easy copying
+        const textArea = document.createElement('textarea');
+        textArea.value = password;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-9999px';
+        textArea.style.top = '-9999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {
+          // Try to copy automatically
+          document.execCommand('copy');
+          textArea.remove();
+          
+          // Show success message
+          alert(
+            '✅ PASSWORD COPIED TO CLIPBOARD!\n\n' +
+            '🔑 Password: ' + password + '\n\n' +
+            '👤 User: ' + userName + '\n' +
+            '📧 Email: ' + userEmail + '\n\n' +
+            '⚠️ Share this password securely.'
+          );
+        } catch (err) {
+          textArea.remove();
+          // If copy fails, show alert with password
+          alert(alertMessage);
+        }
+        
+        // Clear form
         setFormData({ email: '', name: '', role: '', team: '' });
-        if (onSuccess) { onSuccess(result.user); }
+        
+        if (onSuccess) {
+          onSuccess(result.user);
+        }
+        
+        // Close the modal
+        setTimeout(() => {
+          onClose();
+        }, 500);
+
       } else {
-        setMessage(result.error || 'Provisioning failed'); setMessageType('error');
+        setMessage(result.error || 'Provisioning failed');
       }
     } catch (error) {
-      setMessage(error.message || 'Provisioning failed'); setMessageType('error');
-    } finally { setLoading(false); }
+      console.error('Registration error:', error);
+      setMessage(error.message || 'Provisioning failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSetPassword = async (e) => {
-    e.preventDefault();
-    setLoading(true); setMessage(''); setMessageType('info');
-    try {
-      if (!selectedUser) throw new Error('No node selected');
-      const password = document.getElementById('newPassword').value;
-      if (!password || password.length < 6) throw new Error('Encryption key must be >= 6 chars');
-
-      const { data: authData, error: authError } = await supabase.auth.signUp({ email: selectedUser.email, password: password, options: { data: { name: selectedUser.name, role: selectedUser.role } } });
-      if (authError) throw new Error('Failed to mint auth key: ' + authError.message);
-
-      await supabase.from('hr_users').update({ id: authData.user.id }).eq('email', selectedUser.email);
-      await supabase.from('audit_logs').insert({ table_name: 'hr_users', record_id: authData.user.id, action: 'set_password', new_data: { email: selectedUser.email, name: selectedUser.name, set_by: user?.email || 'system' }, performed_by: user?.email || 'system' });
-
-      setMessage(`✅ Auth key minted for ${selectedUser.name}! Node active.`); setMessageType('success');
-      setUsersWithoutAuth(prev => prev.filter(u => u.email !== selectedUser.email));
-      
-      const remaining = usersWithoutAuth.filter(u => u.email !== selectedUser.email);
-      if (remaining.length > 0) { setSelectedUser(remaining[0]); } 
-      else { setSelectedUser(null); setMode('register'); setMessage(''); }
-    } catch (error) {
-      setMessage(error.message || 'Minting failed'); setMessageType('error');
-    } finally { setLoading(false); }
-  };
-
-  const copyToClipboard = () => {
-    if (tempPassword) { navigator.clipboard.writeText(tempPassword); setToastMessage('✅ Decryption key copied!'); setShowToast(true); }
-  };
-
-  // Render Set Password flow
-  if (mode === 'set_password' && usersWithoutAuth.length > 0 && selectedUser) {
-    return (
-      <ModalWrapper onClose={onClose} showToast={showToast} toastMessage={toastMessage}>
-        <h2 style={{ margin: '0 0 8px 0', color: '#fff', fontSize: '24px', fontWeight: '800' }}>🔑 Mount Auth Key</h2>
-        <p style={{ margin: '0 0 24px 0', color: 'var(--text-muted)', fontSize: '14px', lineHeight: '1.5' }}>This node exists in the ledger but requires an active authentication key to connect.</p>
-        
-        {message && <div style={{ padding: '12px', borderRadius: '8px', marginBottom: '24px', background: messageType === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', border: `1px solid ${messageType === 'success' ? '#10b981' : '#ef4444'}`, color: messageType === 'success' ? '#6ee7b7' : '#fca5a5', fontSize: '14px' }}>{message}</div>}
-
-        <form onSubmit={handleSetPassword}>
-          <div style={{ marginBottom: '16px' }}><label style={labelStyle}>Target Node</label><input type="text" value={selectedUser?.name || ''} disabled style={{...inputStyle, opacity: 0.7}} /></div>
-          <div style={{ marginBottom: '16px' }}><label style={labelStyle}>Identifier (Email)</label><input type="email" value={selectedUser?.email || ''} disabled style={{...inputStyle, opacity: 0.7}} /></div>
-          <div style={{ marginBottom: '16px' }}><label style={labelStyle}>Clearance Role</label><input type="text" value={selectedUser?.role || ''} disabled style={{...inputStyle, opacity: 0.7}} /></div>
-          <div style={{ marginBottom: '24px' }}>
-            <label style={labelStyle}>Mint Password *</label>
-            <input id="newPassword" type="password" placeholder="Min 6 characters" required minLength="6" style={inputStyle} />
-          </div>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <button type="button" onClick={onClose} className="btn-glass" style={{ flex: 1 }}>Skip for Now</button>
-            <button type="submit" disabled={loading} className="btn-premium" style={{ flex: 2 }}>{loading ? 'Minting...' : '✅ Commit & Activate Node'}</button>
-          </div>
-        </form>
-      </ModalWrapper>
-    );
-  }
-
-  // Render main Registration form
+  // Registration form
   return (
-    <ModalWrapper onClose={onClose} showToast={showToast} toastMessage={toastMessage}>
-      {!showSuccess && (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0,0,0,0.85)',
+      backdropFilter: 'blur(10px)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 99999,
+      padding: '20px'
+    }}>
+      <div style={{
+        padding: '40px',
+        maxWidth: '480px',
+        width: '100%',
+        maxHeight: '90vh',
+        overflowY: 'auto',
+        position: 'relative',
+        background: 'rgba(20, 20, 40, 0.95)',
+        border: '1px solid rgba(255,255,255,0.1)',
+        borderRadius: '16px'
+      }}>
+        <button
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            padding: '6px 12px',
+            fontSize: '18px',
+            background: 'rgba(255,255,255,0.1)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            borderRadius: '8px',
+            color: '#fff',
+            cursor: 'pointer'
+          }}
+        >
+          ✕
+        </button>
+
         <div style={{ marginBottom: '32px' }}>
-          <h2 style={{ margin: '0 0 8px 0', color: '#fff', fontSize: '24px', fontWeight: '800' }}>👤 Provision HR Node</h2>
-          <p style={{ margin: '0', color: 'var(--text-muted)', fontSize: '14px', lineHeight: '1.5' }}>Initialize a new team member into the central workspace. A secure key will be generated.</p>
+          <h2 style={{ margin: '0 0 8px 0', color: '#fff', fontSize: '24px', fontWeight: '800' }}>
+            Create HR User
+          </h2>
+          <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>
+            Fill in the details to create a new HR user account.
+          </p>
         </div>
-      )}
 
-      {message && !showSuccess && (
-        <div style={{ padding: '12px', borderRadius: '8px', marginBottom: '24px', background: messageType === 'error' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)', border: `1px solid ${messageType === 'error' ? '#ef4444' : '#3b82f6'}`, color: messageType === 'error' ? '#fca5a5' : '#93c5fd', fontSize: '14px' }}>{message}</div>
-      )}
-
-      {showSuccess && tempPassword && (
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎉</div>
-          <h3 style={{ margin: '0 0 24px 0', color: '#34d399', fontSize: '22px', fontWeight: '800' }}>Node Successfully Provisioned!</h3>
-          <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', padding: '20px', borderRadius: '12px', marginBottom: '24px', textAlign: 'left', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '12px 16px' }}>
-            <span style={{ color: 'var(--text-muted)' }}>Name:</span><span style={{ color: '#fff', fontWeight: '600' }}>{registeredUser?.name || formData.name}</span>
-            <span style={{ color: 'var(--text-muted)' }}>Email:</span><span style={{ color: '#fff', fontWeight: '600' }}>{registeredUser?.email || formData.email}</span>
+        {message && (
+          <div style={{
+            padding: '12px',
+            borderRadius: '8px',
+            marginBottom: '24px',
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid #ef4444',
+            color: '#fca5a5',
+            fontSize: '14px'
+          }}>
+            {message}
           </div>
-          <div style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid var(--primary)', padding: '24px', borderRadius: '12px', marginBottom: '24px' }}>
-            <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '600' }}>Decryption Key (Temp)</p>
-            <code style={{ display: 'block', fontSize: '24px', fontWeight: '800', color: '#fff', letterSpacing: '2px' }}>{tempPassword}</code>
-          </div>
-          <button onClick={copyToClipboard} className="btn-premium" style={{ width: '100%', marginBottom: '16px' }}>📋 Copy Credentials to Clipboard</button>
-          <p style={{ color: '#fbbf24', fontSize: '13px', margin: 0 }}>⚠️ Deliver this key securely. The node will enforce a password rotation upon first connection.</p>
-        </div>
-      )}
+        )}
 
-      {!showSuccess && (
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: '20px' }}>
             <label style={labelStyle}>Full Name *</label>
-            <input type="text" placeholder="John Doe" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required style={inputStyle} />
+            <input
+              type="text"
+              placeholder="John Doe"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              required
+              style={inputStyle}
+            />
           </div>
           <div style={{ marginBottom: '20px' }}>
-            <label style={labelStyle}>Organizational Email *</label>
-            <input type="email" placeholder="john@jarurat.care" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} required style={inputStyle} />
+            <label style={labelStyle}>Email *</label>
+            <input
+              type="email"
+              placeholder="john@jarurat.care"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              required
+              style={inputStyle}
+            />
           </div>
           <div style={{ marginBottom: '20px' }}>
-            <label style={labelStyle}>Clearance Role *</label>
-            <select value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} required style={{...inputStyle, color: '#000'}}>
-              <option value="">Select Protocol</option>
+            <label style={labelStyle}>Role *</label>
+            <select
+              value={formData.role}
+              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+              required
+              style={{ ...inputStyle, color: '#000' }}
+            >
+              <option value="">Select Role</option>
               <option value="panelist">Panel Evaluator</option>
               <option value="assignment_team">Assignment Controller</option>
-              <option value="scheduling_team">Scheduler Node</option>
+              <option value="scheduling_team">Scheduler</option>
             </select>
           </div>
           <div style={{ marginBottom: '32px' }}>
-            <label style={labelStyle}>Department Vector *</label>
-            <select value={formData.team} onChange={(e) => setFormData({...formData, team: e.target.value})} required style={{...inputStyle, color: '#000'}}>
-              <option value="">Assign Vector</option>
+            <label style={labelStyle}>Team *</label>
+            <select
+              value={formData.team}
+              onChange={(e) => setFormData({ ...formData, team: e.target.value })}
+              required
+              style={{ ...inputStyle, color: '#000' }}
+            >
+              <option value="">Select Team</option>
               <option value="panel_r1">Panel R1</option>
               <option value="panel_r2">Panel R2</option>
               <option value="assignment">Assignment Hub</option>
@@ -225,12 +292,47 @@ const RegisterUser = ({ onClose, onSuccess }) => {
             </select>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
-            <button type="button" onClick={onClose} className="btn-glass" style={{ flex: 1 }}>Abort</button>
-            <button type="submit" disabled={loading} className="btn-premium" style={{ flex: 2 }}>{loading ? 'Compiling...' : 'Execute Provisioning'}</button>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                flex: 1,
+                padding: '14px',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: '10px',
+                color: '#94a3b8',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                fontSize: '14px'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                flex: 2,
+                padding: '14px',
+                background: loading ? '#4b5563' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                border: 'none',
+                borderRadius: '10px',
+                color: '#fff',
+                fontWeight: '700',
+                fontSize: '14px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.6 : 1,
+                transition: 'all 0.2s ease'
+              }}
+            >
+              {loading ? 'Creating...' : 'Create User'}
+            </button>
           </div>
         </form>
-      )}
-    </ModalWrapper>
+      </div>
+    </div>
   );
 };
 
