@@ -2,8 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
 
-const CLIENT_ID = import.meta.env.GOOGLE_CLIENT_ID;
-const REDIRECT_URI = import.meta.env.GOOGLE_REDIRECT_URI;
+const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const REDIRECT_URI = import.meta.env.VITE_GOOGLE_REDIRECT_URI;
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar',
   'https://www.googleapis.com/auth/calendar.events',
